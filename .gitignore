@@ -1,0 +1,7 @@
+/target
+*.png
+*.log
+*.lock
+.vscode
+*.svg
+.env
