@@ -1,3 +1,3 @@
 -- This file should undo anything in `up.sql`
 
-DROP TABLE game_mode;
+DROP TABLE interaction_history;

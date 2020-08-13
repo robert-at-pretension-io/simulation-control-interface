@@ -1,5 +1,5 @@
 -- Your SQL goes here
-
+-- this directory was made hidden so that the game_mode_option_table can be setup first!
 
 
 CREATE TABLE interaction_history (
@@ -10,5 +10,5 @@ CREATE TABLE interaction_history (
     start_time TIMESTAMP NOT NULL,
     end_date TIMESTAMP ,
     end_time TIMESTAMP ,
-    mode game_mode NOT NULL
+    mode text REFERENCES game_mode (valid_mode) ON UPDATE CASCADE
 );

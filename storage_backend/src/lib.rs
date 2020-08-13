@@ -25,9 +25,11 @@ use self::models::{User, NewUser};
 
 pub async fn create_user(conn : &PgConnection, ) -> Result<User,diesel::result::Error> {
 
+    use self::schema::users::dsl::*;
+
     let new_user = NewUser{date_created: Utc::now().naive_utc(), online: false, last_login: None};
     
-    diesel::insert_into(models::users::table)
+    diesel::insert_into(users)
     .values(&new_user)
     .get_result(conn)
 }

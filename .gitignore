@@ -4,4 +4,4 @@
 *.lock
 .vscode
 *.svg
-.env
+
