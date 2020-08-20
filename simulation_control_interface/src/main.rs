@@ -45,10 +45,35 @@ match result {
     Err(err) => HttpResponse::NotAcceptable().message_body(err.to_string().into())
 }
 
-
-
 }
 
+
+async fn list_game_modes() -> HttpResponse{
+    let conn = storage_backend::establish_connection();
+    let result = storage_backend::list_game_modes(&conn).await;
+    
+    match result {
+        Ok(gameModes) => HttpResponse::Ok().json(gameModes),
+        Err(err) => HttpResponse::NotAcceptable().message_body(err.to_string().into())
+    }
+    
+    }
+#[derive(Deserialize)]
+struct PathInfo {
+    user_id : i64,
+    mode : String
+}
+
+async fn create_interaction(path : web::Path<PathInfo>) -> HttpResponse {
+    let conn = storage_backend::establish_connection();
+    let result = storage_backend::create_interaction(&conn, path.user_id, path.mode.clone()).await;
+
+
+match result {
+    Ok(interaction_history) => HttpResponse::Ok().json(interaction_history),
+    Err(err) => HttpResponse::NotAcceptable().message_body(err.to_string().into())
+}
+}
 
 
 #[actix_rt::main]
@@ -64,11 +89,11 @@ async fn main() -> std::io::Result<()> {
 
     HttpServer::new(|| {
         App::new()
-            .service(
-                web::resource("/create_user")
-                .route(web::get().to( create_user )
-            )
-        ) })
+            .route("/create_user", web::get().to( create_user ))
+            .route("create_interaction/{user_id}/{mode}", web::get().to(create_interaction))
+            .route("list_game_modes", web::get().to(list_game_modes))
+            
+            })
     .bind("127.0.0.1:8080")?
     .run()
     .await

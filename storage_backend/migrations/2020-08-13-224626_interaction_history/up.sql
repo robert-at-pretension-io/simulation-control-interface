@@ -2,12 +2,11 @@
 
 
 CREATE TABLE interaction_history (
-    id BIGSERIAL PRIMARY KEY,
-    person BIGSERIAL REFERENCES users(id),
+    id BIGSERIAL,
+    user_id BIGSERIAL REFERENCES users(id),
     enjoyed_interaction BOOL,
-    start_date TIMESTAMP NOT NULL,
     start_time TIMESTAMP NOT NULL,
-    end_date TIMESTAMP ,
     end_time TIMESTAMP ,
-    mode text REFERENCES game_mode (valid_mode) ON UPDATE CASCADE NOT NULL
+    mode text REFERENCES game_modes (valid_mode) ON UPDATE CASCADE NOT NULL,
+    PRIMARY KEY(id, user_id)
 );

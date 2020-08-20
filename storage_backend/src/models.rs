@@ -1,5 +1,5 @@
 
-use chrono::{ NaiveDateTime, NaiveDate};
+use chrono::{ NaiveDateTime};
 use serde::Serialize;
 
 #[derive(Queryable, Serialize)]
@@ -21,14 +21,33 @@ pub struct NewUser{
 }
 
 
-#[derive(Queryable)]
+#[derive(Queryable, Serialize)]
 pub struct InteractionHistory {
     pub id: i64,
-    pub person : i64,
-    enjoyed_interaction : Option<bool>,
-    start_date : NaiveDate,
-    start_time: NaiveDateTime,
-    end_date: Option<NaiveDate>,
-    end_time: Option<NaiveDateTime>,
-    mode: String //How can I place a restriction on the type of string...?
+    pub user_id : i64,
+    pub enjoyed_interaction : Option<bool>,
+    pub start_time : NaiveDateTime,
+    pub end_time: Option<NaiveDateTime>,
+    pub mode: String //How can I place a restriction on the type of string...?
+}
+
+
+use super::schema::interaction_history;
+
+
+#[derive(Insertable)]
+#[table_name="interaction_history"]
+pub struct NewInteractionHistory {
+    pub user_id : i64,
+    pub enjoyed_interaction : Option<bool>,
+    pub start_time: NaiveDateTime,
+    pub end_time: Option<NaiveDateTime>,
+    pub mode: String //How can I place a restriction on the type of string...?
+}
+
+
+use super::schema::game_modes;
+#[derive(Insertable, Queryable, Serialize)]
+pub struct GameMode {
+    pub valid_mode : String,
 }
