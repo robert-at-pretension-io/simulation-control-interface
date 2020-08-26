@@ -51,3 +51,9 @@ use super::schema::game_modes;
 pub struct GameMode {
     pub valid_mode : String,
 }
+
+impl From<String> for GameMode {
+    fn from(string : String) -> Self {
+        GameMode {valid_mode : string}
+    }
+}

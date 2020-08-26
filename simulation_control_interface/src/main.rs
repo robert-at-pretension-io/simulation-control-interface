@@ -53,7 +53,7 @@ async fn list_game_modes() -> HttpResponse{
     let result = storage_backend::list_game_modes(&conn).await;
     
     match result {
-        Ok(gameModes) => HttpResponse::Ok().json(gameModes),
+        Ok(game_mode) => HttpResponse::Ok().json(game_mode),
         Err(err) => HttpResponse::NotAcceptable().message_body(err.to_string().into())
     }
     
