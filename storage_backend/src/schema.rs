@@ -1,4 +1,13 @@
 table! {
+    abstract_personality_schema (user_id) {
+        user_id -> Int8,
+        binary_encoding -> Nullable<Text>,
+        last_systematic_update -> Nullable<Timestamp>,
+        last_micro_update -> Nullable<Timestamp>,
+    }
+}
+
+table! {
     categorical_types (id) {
         approved -> Bool,
         question_description -> Nullable<Varchar>,
@@ -55,6 +64,7 @@ table! {
     }
 }
 
+joinable!(abstract_personality_schema -> users (user_id));
 joinable!(interaction_history -> game_modes (mode));
 joinable!(interaction_history -> users (user_id));
 joinable!(user_question_responses -> categorical_types (categorical_type_id));
@@ -62,6 +72,7 @@ joinable!(user_question_responses -> numeric_types (numeric_type_id));
 joinable!(user_question_responses -> users (user_id));
 
 allow_tables_to_appear_in_same_query!(
+    abstract_personality_schema,
     categorical_types,
     game_modes,
     interaction_history,
