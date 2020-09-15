@@ -1,0 +1,49 @@
+<html>
+<script>
+
+var socket = null;
+
+function setupWebsocketConnection() {
+    var addressString = "127.0.0.1";
+    var portNumber = "80";
+    var url = "ws://" + addressString + ":" + portNumber;
+    console.log(url)
+    socket =  new WebSocket(url);
+
+    socket.onopen = function(e) {
+    console.log(JSON.stringify(e));
+  alert("[open] Connection established");
+  alert("Sending to server");
+  socket.send("My name is John");
+};
+
+socket.onmessage = function(event) {
+  alert(`[message] Data received from server: ${event.data}`);
+};
+
+socket.onclose = function(event) {
+  if (event.wasClean) {
+    alert(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+  } else {
+    // e.g. server process killed or network down
+    // event.code is usually 1006 in this case
+    alert('[close] Connection died');
+  }
+};
+
+socket.onerror = function(error) {
+  alert(`[error] ${error.message}`);
+};
+
+}
+
+
+
+
+
+
+
+</script>
+
+<button onclick="setupWebsocketConnection()"> click here </button>
+</html>
