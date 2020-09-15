@@ -3,4 +3,5 @@
 members = [
     "simulation_control_interface",
     "storage_backend",
+    "websocket_server",
 ]
