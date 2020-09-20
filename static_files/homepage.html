@@ -3,6 +3,19 @@
 
 var socket = null;
 
+function foo() {
+
+console.log("Pinging server");
+if (socket != null) {
+socket.send("ping...");
+}
+
+setTimeout(foo, 5000);
+}
+
+foo();
+
+
 function setupWebsocketConnection() {
     var addressString = "127.0.0.1";
     var portNumber = "80";
@@ -18,8 +31,10 @@ function setupWebsocketConnection() {
 };
 
 socket.onmessage = function(event) {
+  console.log("Data was in fact received!:\n" + JSON.stringify(event));
   alert(`[message] Data received from server: ${event.data}`);
 };
+
 
 socket.onclose = function(event) {
   if (event.wasClean) {
@@ -29,12 +44,18 @@ socket.onclose = function(event) {
     // event.code is usually 1006 in this case
     alert('[close] Connection died');
   }
+  socket = null;
 };
 
 socket.onerror = function(error) {
   alert(`[error] ${error.message}`);
 };
 
+}
+
+function disconnection_websocket () {
+  
+  console.log("Just attempted to close the websocket connection...")
 }
 
 
@@ -46,4 +67,6 @@ socket.onerror = function(error) {
 </script>
 
 <button onclick="setupWebsocketConnection()"> click here </button>
+
+<button onclick="disconnection_websocket"> End the connection.</button>
 </html>

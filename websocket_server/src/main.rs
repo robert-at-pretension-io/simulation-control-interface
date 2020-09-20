@@ -1,6 +1,8 @@
 use tokio::net::TcpListener;
 use tokio::stream::StreamExt;
 use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::prelude::*;
+
 
 
 //use std::io;
@@ -19,12 +21,41 @@ async fn main()  {
             match stream {
                 Ok(stream) => {
                     println!("new client! Let's try upgradding them to a websocket connection on port 80!");
+
+                    
+
                     match tokio_tungstenite::accept_async(stream).await {
                         Err(e) => {println!("sad times... an error occurred:\n {:?}", e);}
-                        Ok(mut WebSocketStream) => {
+                        Ok(mut websocket_stream) => {
                             println!("Seems it ACTUALLY worked... now just to do something with the stream");
-                            let address = WebSocketStream.get_mut().peer_addr().unwrap();
+                            
+
+                            let address = websocket_stream.get_ref().peer_addr().unwrap();
+                            
                             println!("Peer at address {} has connected.", address);
+
+
+                            match websocket_stream.get_mut().write(b"Test.").await {
+                                Ok(data_size) => {println!("supposedly just wrote this much data: {}!", data_size);},
+                                Err(uhhh) => {println!("oh man, look at that error... wild: {}", uhhh)}
+                            }
+                                
+                            
+                        
+
+                        while let Some(stuff) = websocket_stream.try_next().await.unwrap() {
+                            println!("The server says: ooooo boy, someone to talk to! The person at {} said {}", address, stuff);
+
+
+
+
+                            
+
+                            // println!("Of course, this simply wouldn't do so I disconnected promptly. The fucker.");
+                            // websocket_stream.close(None).await;
+                        }
+
+
                         }
                     }
     
