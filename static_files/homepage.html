@@ -3,17 +3,17 @@
 
 var socket = null;
 
-function foo() {
+// function foo() {
 
-console.log("Pinging server");
-if (socket != null) {
-socket.send("ping...");
-}
+// console.log("Pinging server");
+// if (socket != null) {
+// socket.send("ping...");
+// }
 
-setTimeout(foo, 5000);
-}
+// setTimeout(foo, 5000);
+// }
 
-foo();
+// foo();
 
 
 function setupWebsocketConnection() {
@@ -34,6 +34,10 @@ socket.onmessage = function(event) {
   console.log("Data was in fact received!:\n" + JSON.stringify(event));
   alert(`[message] Data received from server: ${event.data}`);
 };
+
+socket.addEventListener("message", (data) => {
+  console.log("Received the following data:", data);
+});
 
 
 socket.onclose = function(event) {
