@@ -58,7 +58,7 @@ socket.onerror = function(error) {
 }
 
 function disconnection_websocket () {
-  
+  socket.close(1000);
   console.log("Just attempted to close the websocket connection...")
 }
 
@@ -72,5 +72,5 @@ function disconnection_websocket () {
 
 <button onclick="setupWebsocketConnection()"> click here </button>
 
-<button onclick="disconnection_websocket"> End the connection.</button>
+<button onclick="disconnection_websocket()"> End the connection.</button>
 </html>
