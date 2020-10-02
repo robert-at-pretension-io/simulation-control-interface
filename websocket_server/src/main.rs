@@ -1,11 +1,6 @@
 use tokio::net::{TcpListener, TcpStream};
 use tokio::stream::StreamExt;
-use tokio::sync::{broadcast, mpsc, oneshot,watch};
-
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
-use tokio::task::spawn_blocking;
+use tokio::sync::{ mpsc, oneshot};
 
 use futures_util::SinkExt;
 
@@ -17,6 +12,7 @@ use std::net::SocketAddr;
 enum ConnectionStatus {
     Offline,
     Online,
+    NeedsWebRtcUpgrade,
     WithPartner,
     WaitingForPartner
 }
@@ -71,19 +67,18 @@ async fn ws_connection(mut rx : mpsc::Sender<Connection>, stream : TcpStream) {
                             if (stuff.is_close()) {println!("The client is trying to close the connection"); todo!() }
                             println!("The server says: ooooo boy, someone to talk to! The person at {} said \"{}\"", address, stuff.to_string());
                         }
-
-
 }
 
 #[tokio::main]
 async fn main()  {
     let mut listener = TcpListener::bind("127.0.0.1:80").await.unwrap();
 
-    let (mut tx,mut rx) = mpsc::channel::<Connection>(10);
+    let (mut status_updater_tx,mut status_updater_rx) = mpsc::channel::<Connection>(10);
 
+    // Connection status manager
 tokio::spawn(async move {
     let mut connection_vec = Vec::<Connection>::new();
-    while let response = rx.recv().await {
+    while let response = status_updater_rx.recv().await {
         match response {
             Some(connection) => {
                 connection_vec.push(connection);
@@ -96,11 +91,22 @@ tokio::spawn(async move {
 
 });
 
+    // ----------   Process handler   ----------
+    // This needs two oneshot channels. 
+    // 1. status manager -> process handler
+    // 2. process handler -> websocket manager
+    //
+    // This will enable the status to be updated ONLY by the status manager so there is a "ground-truth" of connection state
+    //
+    // This method of processing the new states will also allow the process handler to spawn new green threads as needed
 
+
+
+        // websocket manager
         while let Some(Ok(stream)) = listener.next().await {
 
             println!("made it inside the while loop!");
-            let tx_clone = tx.clone();
+            let tx_clone = status_updater_tx.clone();
             tokio::spawn(  async {ws_connection( tx_clone, stream).await});
         }
 }
