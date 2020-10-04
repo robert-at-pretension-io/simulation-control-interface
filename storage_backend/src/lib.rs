@@ -20,7 +20,7 @@ pub fn establish_connection() -> PgConnection {
         .expect(&format!("Error connecting to {}", database_url))
 }
 
-use self::models::{User, NewUser,InteractionHistory, NewInteractionHistory, GameMode};
+use self::models::{User, NewUser,InteractionHistory, NewInteractionHistory};
 
 
 pub async fn create_user(conn : &PgConnection, ) -> Result<User,diesel::result::Error> {
