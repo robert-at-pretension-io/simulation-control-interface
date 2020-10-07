@@ -1,6 +1,6 @@
 use tokio::net::{TcpListener, TcpStream};
 use tokio::stream::StreamExt;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::mpsc;
 
 use futures_util::SinkExt;
 
@@ -8,7 +8,12 @@ use tokio_tungstenite;
 
 use std::collections::HashMap;
 
+
 use std::net::SocketAddr;
+
+use tracing::{event, instrument, Instrument};
+use tracing_subscriber;
+use log::info;
 
 #[derive(Debug)]
 enum ConnectionStatus {
@@ -29,47 +34,37 @@ impl Default for ConnectionStatus {
 struct Connection {
     connection_status: ConnectionStatus,
     ip_address: SocketAddr,
-    ws_oneshot_transmitter: Option<oneshot::Sender<String>>,
+    // ws_oneshot_transmitter: Option<mpsc::Sender<String>>,
 }
 
 impl Connection {
     fn new(
         ip_address: SocketAddr,
         connection_status: Option<ConnectionStatus>,
-        ws_oneshot_transmitter: Option<oneshot::Sender<String>>,
+        // ws_oneshot_transmitter: Option<mpsc::Sender<String>>,
     ) -> Self {
         Connection {
             connection_status: connection_status.unwrap_or(ConnectionStatus::default()),
             ip_address,
-            ws_oneshot_transmitter,
+            // ws_oneshot_transmitter,
         }
     }
 }
 
-// async fn add_connection(ip_address : String) -> {
-//     let new_connection = Connection::new(IpAddr::from(ip_address), connection_status);
-//     let (mut tx, mut rx) = watch::channel::<Connection>(10);
-// }
-
+#[instrument]
 async fn ws_connection(
     mut tx_status_manager: mpsc::Sender<Connection>,
     stream: TcpStream,
-    mut ws_receiver: oneshot::Receiver<String>,
-    ws_transmitter: oneshot::Sender<String>,
+    //ws_transmitter: mpsc::Sender<String>,
 ) {
-    println!("Inside the ws_connection function.");
 
     let ip_address = stream.peer_addr().unwrap();
 
-    while let Ok(stuff) = ws_receiver.try_recv() {
-        println!("Got the following stuff: {:?}", stuff);
-    }
-
     tx_status_manager
-        .send(Connection::new(ip_address, None, Some(ws_transmitter)))
+        .send(Connection::new(ip_address, None))
         .await
         .expect("The connection was closed :[");
-    println!("new client! Let's try upgradding them to a websocket connection on port 80!");
+    info!("new client! Let's try upgradding them to a websocket connection on port 80!");
 
     let mut ws_stream = tokio_tungstenite::accept_async(stream)
         .await
@@ -83,19 +78,19 @@ async fn ws_connection(
 
     while let Some(stuff) = ws_stream.try_next().await.unwrap() {
         if stuff.is_close() {
-            println!("The client is trying to close the connection");
+            info!("The client is trying to close the connection");
 
             tx_status_manager
                 .send(Connection::new(
                     ip_address,
                     Some(ConnectionStatus::ClosedConnection),
-                    None,
+                    
                 ))
                 .await
                 .expect("The connection was closed :[");
             break;
         }
-        println!(
+        info!(
             "The server says: ooooo boy, someone to talk to! The person at {} said \"{}\"",
             address,
             stuff.to_string()
@@ -103,41 +98,62 @@ async fn ws_connection(
     }
 }
 
+#[instrument]
+async fn status_manager(mut status_updater_rx :  tokio::sync::mpsc::Receiver<Connection>) {
+
+    let mut connection_status = HashMap::<SocketAddr, ConnectionStatus>::new();
+
+    while let Some(connection) = status_updater_rx.recv().await {
+        match connection.connection_status {
+            ConnectionStatus::Online => {
+                // let mut ws_oneshot_transmitter = connection
+                //     .ws_oneshot_transmitter
+                //     .expect("The connection must go through!");
+
+                // ws_oneshot_transmitter
+                //     .send(String::from("Added the connection"))
+                //     .await
+                //     .expect("fugck, couldn't send the message");
+                connection_status.insert(connection.ip_address, connection.connection_status);
+                
+            }
+            ConnectionStatus::NeedsWebRtcUpgrade => {
+                todo!();
+            }
+            ConnectionStatus::ClosedConnection => {
+                connection_status.insert(connection.ip_address, ConnectionStatus::ClosedConnection).expect("A connection must have a pre-existing status before closing?... right?");
+            }
+        }
+        println!("All connections status:");
+        connection_status.iter().for_each(|v| {
+            println!("{} has status: {:?}", v.0, v.1);
+        });
+    }
+
+}
+
 #[tokio::main]
 async fn main() {
+
+    //tracing_subscriber::fmt::Sub
+    
+
     let mut listener = TcpListener::bind("127.0.0.1:80").await.unwrap();
 
-    let (status_updater_tx, mut status_updater_rx) = mpsc::channel::<Connection>(10);
+
+    
+    let (status_updater_tx, status_updater_rx) = mpsc::channel::<Connection>(10);
+
+    // websocket manager
+    while let Some(Ok(stream)) = listener.next().await {
+        // let mut tx_clone = tx.clone();
+        let status_updater_tx_clone = status_updater_tx.clone();
+        tokio::spawn(async  { ws_connection(status_updater_tx_clone, stream).await });
+    }
 
     // Connection status manager, user/connection states are updated here but no "functionality" is really performed.
-    tokio::spawn(async move {
-        let mut connection_status = HashMap::<SocketAddr, ConnectionStatus>::new();
-
-        while let Some(connection) = status_updater_rx.recv().await {
-            match connection.connection_status {
-                ConnectionStatus::Online => {
-                    let ws_oneshot_transmitter = connection
-                        .ws_oneshot_transmitter
-                        .expect("The connection must go through!");
-
-                    ws_oneshot_transmitter
-                        .send(String::from("Added the connection"))
-                        .expect("Could not send the message, the channel was closed :[");
-                    connection_status.insert(connection.ip_address, connection.connection_status);
-                    println!("Total connections:\n");
-                }
-                ConnectionStatus::NeedsWebRtcUpgrade => {
-                    todo!();
-                }
-                ConnectionStatus::ClosedConnection => {
-                    connection_status.insert(connection.ip_address, ConnectionStatus::ClosedConnection).expect("A connection must have a pre-existing status before closing?... right?");
-                }
-            }
-
-            connection_status.iter().for_each(|v| {
-                println!("{} has status: {:?}", v.0, v.1);
-            });
-        }
+    tokio::spawn(async {
+        status_manager(status_updater_rx).await
     });
 
     // ----------   Process handler   ----------
@@ -149,12 +165,16 @@ async fn main() {
     //
     // This method of processing the new states will also allow the process handler to spawn new green threads as needed
 
-    // websocket manager
-    while let Some(Ok(stream)) = listener.next().await {
-        let (tx, rx) = oneshot::channel::<String>();
+    // let (mut tx, mut rx) = mpsc::channel::<String>(10);
 
-        println!("made it inside the while loop!");
-        let status_updater_tx_clone = status_updater_tx.clone();
-        tokio::spawn(async { ws_connection(status_updater_tx_clone, stream, rx, tx).await });
-    }
+    // tokio::spawn(async move {
+    //     match rx.recv().await {
+    //         Some(stuff) => {println!("Got the following stuff: {:?}", stuff);},
+    //         None => {println!("🤷");} 
+            
+    //     }
+    // }).await;
+
+
+
 }
