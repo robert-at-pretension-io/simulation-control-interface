@@ -1,0 +1,11 @@
+/home/elliot/ruststuff/find-tribe/websocket_server/target/rls/debug/deps/futures_core-c17f700371417c3d.rmeta: /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/lib.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/future.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/stream.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/mod.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/poll.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/__internal/mod.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/__internal/atomic_waker.rs
+
+/home/elliot/ruststuff/find-tribe/websocket_server/target/rls/debug/deps/futures_core-c17f700371417c3d.d: /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/lib.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/future.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/stream.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/mod.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/poll.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/__internal/mod.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/__internal/atomic_waker.rs
+
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/lib.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/future.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/stream.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/mod.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/poll.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/__internal/mod.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-core-0.3.5/src/task/__internal/atomic_waker.rs:

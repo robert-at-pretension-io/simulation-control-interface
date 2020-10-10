@@ -1,0 +1,10 @@
+/home/elliot/ruststuff/find-tribe/websocket_server/target/rls/debug/deps/futures_channel-3038a24f6a543eb2.rmeta: /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/lib.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/lock.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/mpsc/mod.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/mpsc/queue.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/mpsc/sink_impl.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/oneshot.rs
+
+/home/elliot/ruststuff/find-tribe/websocket_server/target/rls/debug/deps/futures_channel-3038a24f6a543eb2.d: /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/lib.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/lock.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/mpsc/mod.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/mpsc/queue.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/mpsc/sink_impl.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/oneshot.rs
+
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/lib.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/lock.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/mpsc/mod.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/mpsc/queue.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/mpsc/sink_impl.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/futures-channel-0.3.5/src/oneshot.rs:

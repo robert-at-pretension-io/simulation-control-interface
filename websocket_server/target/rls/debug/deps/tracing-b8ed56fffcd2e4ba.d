@@ -1,0 +1,13 @@
+/home/elliot/ruststuff/find-tribe/websocket_server/target/rls/debug/deps/tracing-b8ed56fffcd2e4ba.rmeta: /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/lib.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/macros.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/dispatcher.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/field.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/instrument.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/level_filters.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/span.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/stdlib.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/subscriber.rs
+
+/home/elliot/ruststuff/find-tribe/websocket_server/target/rls/debug/deps/tracing-b8ed56fffcd2e4ba.d: /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/lib.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/macros.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/dispatcher.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/field.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/instrument.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/level_filters.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/span.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/stdlib.rs /home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/subscriber.rs
+
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/lib.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/macros.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/dispatcher.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/field.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/instrument.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/level_filters.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/span.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/stdlib.rs:
+/home/elliot/.cargo/registry/src/github.com-1ecc6299db9ec823/tracing-0.1.21/src/subscriber.rs:

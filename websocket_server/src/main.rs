@@ -11,9 +11,12 @@ use std::collections::HashMap;
 
 use std::net::SocketAddr;
 
-use tracing::{event, instrument, Instrument};
-use tracing_subscriber;
+use tracing::{instrument, Level};
+use tracing_subscriber::{fmt::format, fmt::format::FmtSpan, fmt};
+use tracing_subscriber::prelude::*;
 use log::info;
+
+use tokio::sync::oneshot;
 
 #[derive(Debug)]
 enum ConnectionStatus {
@@ -54,6 +57,7 @@ impl Connection {
 #[instrument]
 async fn ws_connection(
     mut tx_status_manager: mpsc::Sender<Connection>,
+    mut rx_ws_watch : watch::Receiver<String>,
     stream: TcpStream,
     //ws_transmitter: mpsc::Sender<String>,
 ) {
@@ -64,11 +68,14 @@ async fn ws_connection(
         .send(Connection::new(ip_address, None))
         .await
         .expect("The connection was closed :[");
+
     info!("new client! Let's try upgradding them to a websocket connection on port 80!");
 
     let mut ws_stream = tokio_tungstenite::accept_async(stream)
         .await
         .expect("failed to accept websocket.");
+
+    info!("successfully upgraded connection to stream.");
 
     let message = tungstenite::Message::text(String::from("hello from the server!"));
 
@@ -118,15 +125,15 @@ async fn status_manager(mut status_updater_rx :  tokio::sync::mpsc::Receiver<Con
                 
             }
             ConnectionStatus::NeedsWebRtcUpgrade => {
-                todo!();
+                info!("Would like to ");
             }
             ConnectionStatus::ClosedConnection => {
                 connection_status.insert(connection.ip_address, ConnectionStatus::ClosedConnection).expect("A connection must have a pre-existing status before closing?... right?");
             }
         }
-        println!("All connections status:");
+        info!("All connections status:");
         connection_status.iter().for_each(|v| {
-            println!("{} has status: {:?}", v.0, v.1);
+            info!("{} has status: {:?}", v.0, v.1);
         });
     }
 
@@ -135,6 +142,21 @@ async fn status_manager(mut status_updater_rx :  tokio::sync::mpsc::Receiver<Con
 #[tokio::main]
 async fn main() {
 
+    //let formatter = format::debug_fn(|writer, field, value| write!(writer, "{} : {:?}", field, value)).delimited(",\n");
+
+    //read more about debug_fmt here: https://docs.rs/tracing-subscriber/0.2.12/tracing_subscriber/fmt/struct.SubscriberBuilder.html
+
+    tracing_subscriber::fmt()
+    .with_max_level(Level::DEBUG)
+    .compact()
+    //.fmt_fields(formatter)
+    //.event_format() //Still need to figure this one out... Seems like a way to format specific events... Could be useful later on when the project evolves.
+    .with_level(true)
+    .with_target(true)
+    .with_span_events(FmtSpan::FULL)
+    // sets this to be the default, global subscriber for this application.
+    .init();
+    
     //tracing_subscriber::fmt::Sub
     
 
@@ -143,12 +165,20 @@ async fn main() {
 
     
     let (status_updater_tx, status_updater_rx) = mpsc::channel::<Connection>(10);
+    
+
 
     // websocket manager
     while let Some(Ok(stream)) = listener.next().await {
         // let mut tx_clone = tx.clone();
         let status_updater_tx_clone = status_updater_tx.clone();
-        tokio::spawn(async  { ws_connection(status_updater_tx_clone, stream).await });
+    
+        let process_complete_channel_tx_rx = oneshot::channel();
+
+        // this is a point in the program where the channel should be split up:
+        // Both the tx and rx should will be sent to ws_connection. The tx part will then be sent to the status updater as a message
+
+        tokio::spawn(async  { ws_connection(status_updater_tx_clone, ws_rx_clone ,stream).await });
     }
 
     // Connection status manager, user/connection states are updated here but no "functionality" is really performed.
