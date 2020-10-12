@@ -95,7 +95,7 @@ async fn ws_connection(
 
                 let message = tungstenite::Message::text(String::from("The server acknowledges that you're online!"));     
                 
-                ws_stream.send(message).await.un
+                ws_stream.send(message).await.unwrap();
             
             }
             },

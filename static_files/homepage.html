@@ -6,7 +6,7 @@ var socket = null;
 var version = null;
 
 var initialState = "WebsocketConnection";
-var initialStateValue = False;
+var initialStateValue = false;
 
 var currentState = null;
 
@@ -25,11 +25,13 @@ var possibleStates = [
 ];
 
 function loadTableData(items) {
+    console.log("Attempting to populate the table with the following data:" + JSON.stringify(items));
     const table = document.getElementById("fillMe");
     items.forEach( item => {
+      console.log("Inserting the following data:" + JSON.stringify(item));
       let row = table.insertRow();
       let state = row.insertCell(0);
-      date.innerHTML = item;
+      state.innerHTML = item;
       
       let status = row.insertCell(1);
       status.innerHTML = "";
