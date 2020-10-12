@@ -3,18 +3,45 @@
 
 var socket = null;
 
-// function foo() {
+var version = null;
 
-// console.log("Pinging server");
-// if (socket != null) {
-// socket.send("ping...");
-// }
+var initialState = "WebsocketConnection";
+var initialStateValue = False;
 
-// setTimeout(foo, 5000);
-// }
+var currentState = null;
 
-// foo();
+var possibleStates = [
+  "WebsocketConnected",
+  "VerifiedStates",
+  "VersionChecked",
+  "UpdatingClient",
+  "UserAuthenticated",
+  "WebRTCAvailable",
+  "VideoRTCAvailable",
+  "AudioRTCAvailable",
+  "FindingPartner",
+  "WaitingForPartner",
+  "WithPartner",
+];
 
+function loadTableData(items) {
+    const table = document.getElementById("fillMe");
+    items.forEach( item => {
+      let row = table.insertRow();
+      let state = row.insertCell(0);
+      date.innerHTML = item;
+      
+      let status = row.insertCell(1);
+      status.innerHTML = "";
+      
+      let singleTimeEvent = row.insertCell(2);
+      status.innerHTML = "";
+      
+      let recurringEvery = row.insertCell(3);
+      status.innerHTML = "";
+      
+    });
+  }
 
 function setupWebsocketConnection() {
     var addressString = "127.0.0.1";
@@ -28,6 +55,11 @@ function setupWebsocketConnection() {
   alert("[open] Connection established");
   alert("Sending to server");
   socket.send("My name is John");
+
+
+  loadTableData(possibleStates);
+
+
 };
 
 socket.onmessage = function(event) {
@@ -63,6 +95,11 @@ function disconnection_websocket () {
 }
 
 
+function send_data() {
+  var data = document.getElementById("send_this_data").value;
+  socket.send(data);
+}
+
 
 
 
@@ -70,7 +107,27 @@ function disconnection_websocket () {
 
 </script>
 
-<button onclick="setupWebsocketConnection()"> click here </button>
+<input type="text" id="send_this_data"><br><br>
+
+
+<button onclick="send_data()"> Send data to server </button>
+
+<button onclick="setupWebsocketConnection()"> Start Connection </button>
 
 <button onclick="disconnection_websocket()"> End the connection.</button>
+
+<h1>State Status</h1>
+<table>
+  <thead>
+    <tr>
+      <th>State</th>
+      <th>Status</th>
+      <th>Singular Event</th>
+      <th>Recurring Every __ Seconds</th>
+    </tr>
+  </thead>
+  <tbody id="fillMe"></tbody>
+</table> 
+
+
 </html>
