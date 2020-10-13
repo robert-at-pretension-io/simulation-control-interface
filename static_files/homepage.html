@@ -102,6 +102,21 @@ function send_data() {
   socket.send(data);
 }
 
+function setup_video_and_audio() {
+  const constraints = {
+    'video': true,
+    'audio': true
+};
+
+  navigator.mediaDevices.getUserMedia(constraints).then(stream => {
+    console.log('got mediastream:', stream);
+  })
+  .catch(error => {
+    console.error('could not access the media', error);
+  })
+  ;
+}
+
 
 
 
@@ -117,6 +132,10 @@ function send_data() {
 <button onclick="setupWebsocketConnection()"> Start Connection </button>
 
 <button onclick="disconnection_websocket()"> End the connection.</button>
+
+<button onclick="setup_video_and_audio()"> Attempt to add audio/video locally</button>
+
+<hr>
 
 <h1>State Status</h1>
 <table>

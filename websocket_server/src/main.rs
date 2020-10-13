@@ -2,6 +2,10 @@ use tokio::net::{TcpListener, TcpStream};
 use tokio::stream::StreamExt;
 use tokio::sync::mpsc;
 
+use tokio::time::Interval;
+use tokio::time;
+use std::time::Duration;
+
 
 use futures_util::SinkExt;
 
@@ -21,9 +25,9 @@ use log::info;
 enum ConnectionStatus {
     ClosedConnection,
     Online,
-    NeedsWebRtcUpgrade,
+    //NeedsWebRtcUpgrade,
     //WithPartner,
-    //WaitingForPartner
+    WaitingForPartner
 }
 
 impl Default for ConnectionStatus {
@@ -124,11 +128,43 @@ async fn ws_connection(
 }
 
 #[instrument]
+async fn game_loop(mut status_processer_notifier :  tokio::sync::mpsc::Sender<i32>, round_interval : u64){
+    
+    let mut interval = time::interval(time::Duration::from_secs(round_interval));
+    let mut round_number : i32 = 1;
+
+    loop {
+        interval.tick().await;
+        status_processer_notifier.send(round_number).await.expect("how could you fail?! Just send the new round notification");
+        round_number = round_number + 1;
+    }
+    
+}
+
+#[instrument]
 async fn status_manager(mut status_updater_rx :  tokio::sync::mpsc::Receiver<Connection>) {
 
     let mut connection_status = HashMap::<SocketAddr, ConnectionStatus>::new();
 
-    while let Some(connection) = status_updater_rx.recv().await {
+    let (status_processer_notifier_tx , mut status_processer_notifier_rx) = mpsc::channel::<i32>(10);
+
+    tokio::spawn(async move {game_loop(status_processer_notifier_tx, 2).await});
+
+
+    loop {
+        
+    
+    tokio::select! {
+
+        game_notifier = status_processer_notifier_rx.next() => {
+            if game_notifier.is_some() {
+                println!("The new round is starting!! {} ", game_notifier.unwrap());
+            }
+            
+        },
+
+        some_connection = status_updater_rx.recv() => {
+            let connection = some_connection.unwrap();
 
         info!("Received connection in status_manager");
 
@@ -137,15 +173,11 @@ async fn status_manager(mut status_updater_rx :  tokio::sync::mpsc::Receiver<Con
 
                 connection.ws_mpsc_transmitter.unwrap().send(String::from("sweet sweet acknowledgement!")).await;
 
-                // ws_mpsc_transmitter
-                //     .send(String::from("Added the connection"))
-                //     .await
-                //     .expect("fugck, couldn't send the message");
                 connection_status.insert(connection.ip_address, connection.connection_status);
                 
             }
-            ConnectionStatus::NeedsWebRtcUpgrade => {
-                info!("Would like to ");
+            ConnectionStatus::WaitingForPartner => {
+                info!("Would like to get partner please");
             }
             ConnectionStatus::ClosedConnection => {
                 connection_status.insert(connection.ip_address, ConnectionStatus::ClosedConnection).expect("A connection must have a pre-existing status before closing?... right?");
@@ -155,6 +187,12 @@ async fn status_manager(mut status_updater_rx :  tokio::sync::mpsc::Receiver<Con
         connection_status.iter().for_each(|v| {
             info!("{} has status: {:?}", v.0, v.1);
         });
+        }
+
+
+
+    }
+
     }
 
 }
@@ -186,7 +224,6 @@ async fn main() {
 
     // websocket manager
     while let Some(Ok(stream)) = listener.next().await {
-        // let mut tx_clone = tx.clone();
         let status_updater_tx_clone = status_updater_tx.clone();
     
         let process_complete_channel_tx_rx = mpsc::channel(10);
@@ -197,26 +234,6 @@ async fn main() {
         tokio::spawn(async  { ws_connection(status_updater_tx_clone, process_complete_channel_tx_rx ,stream).await });
     }
 
-
-
-    // ----------   Process handler   ----------
-    // This needs two mpsc channels.
-    // 1. status manager -> process handler
-    // 2. process handler -> websocket manager
-    //
-    // This will enable the status to be updated ONLY by the status manager so there is a "ground-truth" of connection state
-    //
-    // This method of processing the new states will also allow the process handler to spawn new green threads as needed
-
-    // let (mut tx, mut rx) = mpsc::channel::<String>(10);
-
-    // tokio::spawn(async move {
-    //     match rx.recv().await {
-    //         Some(stuff) => {println!("Got the following stuff: {:?}", stuff);},
-    //         None => {println!("🤷");} 
-            
-    //     }
-    // }).await;
 
 
 
