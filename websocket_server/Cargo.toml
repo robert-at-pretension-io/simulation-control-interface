@@ -18,3 +18,5 @@ tracing-futures = "0.2.4"
 tracing-subscriber = {version = "0.2", features = ["fmt", "tracing-log"]}
 tracing-log = "0.1.1"
 log = "0.4"
+
+uuid = { version = "0.8.1", features = ["v4", "serde"]}
