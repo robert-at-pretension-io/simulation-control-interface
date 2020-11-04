@@ -20,6 +20,9 @@ use tracing_subscriber::fmt::format::FmtSpan;
 
 use uuid::Uuid;
 
+use serde::{Deserialize, Serialize};
+use serde_json::Result;
+
 #[derive(Debug, PartialEq, Eq)]
 enum ConnectionCommand {
     ClosedConnection,
@@ -56,10 +59,11 @@ impl Connection {
     }
 }
 
+
 #[instrument]
 async fn ws_connection(
     mut tx_status_manager: mpsc::Sender<(ConnectionCommand, Option<Connection>)>,
-    process_complete_channel_tx_rx: (mpsc::Sender<String>, mpsc::Receiver<String>),
+    process_complete_channel_tx_rx: (mpsc::Sender<Box< dyn Deserialize>>, mpsc::Receiver<Box<dyn Jsonable>>),
     stream: TcpStream,
     //ws_transmitter: mpsc::Sender<String>,
 ) {
