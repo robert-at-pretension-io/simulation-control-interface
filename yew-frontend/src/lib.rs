@@ -1,11 +1,15 @@
 use wasm_bindgen::prelude::*;
 use yew::prelude::*;
+use web_sys::WebSocket;
+
+static WEBSOCKET_URL : &str = "ws://127.0.0.1:80";
 
 struct Model {
     event_log: Vec<String>,
     current_state: State,
     user: String,
     link: ComponentLink<Self>,
+    websocket: Option<WebSocket>,
 }
 
 enum State {
@@ -26,6 +30,7 @@ impl Component for Model {
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         Model {
             link,
+            websocket: None,
             event_log: Vec::<String>::new(),
             current_state: State::WelcomeScreen,
             user: String::from("Random User"),
@@ -35,6 +40,12 @@ impl Component for Model {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
             Msg::ConnectToServer => {
+
+                let ws =  WebSocket::new(WEBSOCKET_URL).unwrap();
+                //TODO: setup the websocket connection here...
+                // * add listener and stuff?
+                // * the listener should send messages to YEW
+                self.websocket = Some(ws);
                 self.current_state = State::ConnectedToWebsocketServer;
                 true
             }
@@ -65,13 +76,17 @@ impl Component for Model {
                             {"Connect to the server."}
                         </button>
 
+
+
                     </div>
                 }
             }
             State::ConnectedToWebsocketServer => {
                 html! {
-                    <h1> {"You're connected to the server!"} </h1>
-
+                    <div>
+                        <h1> {"You're connected to the server!"} </h1>
+                        <p> {format!("Here are some details about the connection:\n {:?}", self.websocket)} </p>
+                    </div>
 
                 }
             }
