@@ -1,8 +1,9 @@
 [workspace]
 
 members = [
-    "simulation_control_interface",
+    #"simulation_control_interface",
     "storage_backend",
     "websocket_server",
     "yew-frontend",
+    "models",
 ]

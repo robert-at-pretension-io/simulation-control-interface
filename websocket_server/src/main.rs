@@ -15,10 +15,12 @@ use std::net::SocketAddr;
 use log::info;
 use tracing::{instrument, Level};
 
+use models::ControlMessages;
+
 
 #[derive(Debug, PartialEq, Eq)]
 enum ConnectionCommand {
-    ClosedConnection,
+    ClosedConnection(SocketAddr),
     Online,
     //NeedsWebRtcUpgrade,
     //WithPartner,
@@ -66,8 +68,10 @@ async fn ws_connection(
 
     let ip_address = stream.peer_addr().unwrap();
 
+    let this_connection = Connection::new(random_user_uuid.clone(), ip_address, tx);
+
     tx_status_manager
-        .send((ConnectionCommand::Online, Some(Connection::new(random_user_uuid.clone(), ip_address, tx))))
+        .send((ConnectionCommand::Online, Some(this_connection)))
         .await
         .expect("The connection was closed before even getting to update the status within a system. The odds of this happening normally are extremely low... Like someone would have to connection and then almost instantaneously close the connection:[");
 
@@ -79,7 +83,10 @@ async fn ws_connection(
 
     info!("successfully upgraded connection to stream.");
 
-    let message = tungstenite::Message::text(String::from("hello from the server!"));
+    //let message = tungstenite::Message::text(String::from("hello from the server!"));
+
+    let message = tungstenite::Message::binary(
+        ControlMessages::serialize(&ControlMessages::Message(String::from("Hello from the server"))));
 
     ws_stream.send(message).await.unwrap();
 
@@ -107,10 +114,10 @@ async fn ws_connection(
             info!("The client is trying to close the connection");
 
             tx_status_manager
-                .send((ConnectionCommand::ClosedConnection,None))
+                .send((ConnectionCommand::ClosedConnection(address.clone()),None))
                 .await
                 .expect("The connection was closed :[");
-            break;
+            break; // I think this break makes it so that the function returns :o?
         }
 
             },
@@ -142,7 +149,8 @@ async fn status_manager(mut status_updater_rx: tokio::sync::mpsc::Receiver<(Conn
 
     //Connection
 
-    let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<i32>(10);
+    let (status_processer_notifier_tx, mut status_processer_notifier_rx) 
+    = mpsc::channel::<i32>(10);
 
     tokio::spawn(async move { game_loop(status_processer_notifier_tx, 60).await });
 
@@ -157,19 +165,19 @@ async fn status_manager(mut status_updater_rx: tokio::sync::mpsc::Receiver<(Conn
             },
 
             some_connection = status_updater_rx.recv() => {
-                let (connectionCommand, optionalConnection) = some_connection.unwrap();
+                let (connection_command, optional_connection) = some_connection.unwrap();
 
             info!("Received connection in status_manager");
 
-            match connectionCommand {
+            match connection_command {
                 ConnectionCommand::Online => {
-                    let connection = optionalConnection.unwrap();
+                    let connection = optional_connection.unwrap();
     
-                    let connection_socketAddr = connection.ip_address.clone();
-                    let clone_ip = connection_socketAddr.clone();
+                    let connection_socketaddr = connection.ip_address.clone();
+                    let clone_ip = connection_socketaddr.clone();
                     let clone_connection_id = connection.connection_id.clone();
 
-                    online_connections.insert(connection_socketAddr, connection);
+                    online_connections.insert(connection_socketaddr, connection);
 
 
 
@@ -180,19 +188,18 @@ async fn status_manager(mut status_updater_rx: tokio::sync::mpsc::Receiver<(Conn
                 ConnectionCommand::WaitingForPartner => {
                     info!("Would like to get partner please");
                 }
-                ConnectionCommand::ClosedConnection => {
+                ConnectionCommand::ClosedConnection(socketaddr) => {
                     //online_connections.retain(|k,v| {e.connection_status != ConnectionCommand::ClosedConnection })
 
-                    let connection = optionalConnection.unwrap();
 
-                    online_connections.remove_entry(&connection.ip_address);
+                    online_connections.remove_entry(&socketaddr);
 
                     // connection_status.insert(connection.ip_address, ConnectionCommand::ClosedConnection).expect("A connection must have a pre-existing status before closing?... right?");
                 }
             }
             info!("All connections status:");
             online_connections.iter().for_each(|v| {
-                info!("{} has status: {:?}", v.0, connectionCommand);
+                info!("{} has status: {:?}", v.0, connection_command);
             });
             }
 
