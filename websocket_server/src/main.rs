@@ -103,10 +103,10 @@ async fn ws_connection(
 
     // let message = tungstenite::Message::text(String::from("hello from the server!"));
 
-    // let message = tungstenite::Message::binary(
-    //     ControlMessages::serialize(&ControlMessages::Message(String::from("Hello from the server"))));
+    let message = tungstenite::Message::binary(
+        ControlMessages::ServerInitiated.serialize() );
 
-    send_message(&mut ws_stream, ControlMessages::ServerInitiated.to_binary_message()).await;
+    send_message(&mut ws_stream, message).await;
 
     // ws_stream.send(message).await.unwrap();
     // ws_stream.flush().await.unwrap();
