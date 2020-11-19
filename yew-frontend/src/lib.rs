@@ -17,6 +17,7 @@ static WEBSOCKET_URL: &str = "ws://127.0.0.1:80";
 
 struct Model {
     event_log: Vec<String>,
+    user_id: String,
     user: String,
     link: ComponentLink<Self>,
     websocket: Option<WebSocket>,
@@ -58,13 +59,8 @@ impl Model {
 
         
         let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
-            if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
-                    //web_sys::console::log_1(&txt);
-
-                    cloned.send_message(Msg::ServerSentWsMessage(txt.into()))
-            } 
-
-            else if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
+            // The only type of message that will be officially recognized is the almighty ArrayBuffer Binary Data!
+            if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
                 //console_log!("message event, received arraybuffer: {:?}", abuf);
                 let array = js_sys::Uint8Array::new(&abuf);
                 //let len = array.byte_length() as usize;
@@ -77,7 +73,7 @@ impl Model {
 
                 match ControlMessages::deserialize(&array.to_vec()) {
                     ControlMessages::Id(new_id) => {
-                        //update the clients id
+                        cloned.send_message(Msg::UpdateUsername(new_id))
                     }
 
                     ControlMessages::Message(message) => {
@@ -111,6 +107,7 @@ impl Component for Model {
             link,
             websocket: None,
             event_log: Vec::<String>::new(),
+            user_id: String::from("Random ID"),
             user: String::from("Random User"),
         }
     }
@@ -171,6 +168,7 @@ true
                         <h1>
                         {"Welcome!"}
                         </h1>
+                        <p> {format!("How's it going {}",self.user)} </p>
 
                         <div>
                         <p> {format!("The following details the event log of the application:")} </p>

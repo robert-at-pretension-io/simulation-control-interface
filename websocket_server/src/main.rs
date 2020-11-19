@@ -37,14 +37,14 @@ impl Default for ConnectionCommand {
 struct Connection {
     connection_id: String,
     ip_address: SocketAddr,
-    ws_mpsc_transmitter: mpsc::Sender<String>,
+    ws_mpsc_transmitter: mpsc::Sender<ControlMessages>,
 }
 
 impl Connection {
     fn new(
         connection_id: String,
         ip_address: SocketAddr,
-        ws_mpsc_transmitter: mpsc::Sender<String>,
+        ws_mpsc_transmitter: mpsc::Sender<ControlMessages>,
     ) -> Self {
         Connection {
             connection_id,
@@ -76,7 +76,7 @@ async fn send_message(stream : &mut WebSocketStream<TcpStream>,message : tungste
 #[instrument]
 async fn ws_connection(
     mut tx_status_manager: mpsc::Sender<(ConnectionCommand, Option<Connection>)>,
-    process_complete_channel_tx_rx: (mpsc::Sender<String>, mpsc::Receiver<String>),
+    process_complete_channel_tx_rx: (mpsc::Sender<ControlMessages>, mpsc::Receiver<ControlMessages>),
     stream: TcpStream,
     //ws_transmitter: mpsc::Sender<String>,
 ) {
@@ -101,15 +101,11 @@ async fn ws_connection(
 
     info!("successfully upgraded connection to stream.");
 
-    // let message = tungstenite::Message::text(String::from("hello from the server!"));
-
     let message = tungstenite::Message::binary(
         ControlMessages::ServerInitiated.serialize() );
 
     send_message(&mut ws_stream, message).await;
 
-    // ws_stream.send(message).await.unwrap();
-    // ws_stream.flush().await.unwrap();
 
     let address = ws_stream.get_ref().peer_addr().unwrap();
 
@@ -121,7 +117,7 @@ async fn ws_connection(
 
                 info!("looky! {:?}... \n This indicates that the status manager is able to comunicate back to the client through the websocket!", &val);
 
-                let message = tungstenite::Message::text(format!("The server acknowledges that you're online! Here's the message that was sent:\n {}", val.unwrap()));
+                let message = tungstenite::Message::Binary(val.unwrap().serialize());
 
                 ws_stream.send(message).await.unwrap();
 
@@ -203,7 +199,7 @@ async fn status_manager(mut status_updater_rx: tokio::sync::mpsc::Receiver<(Conn
 
 
                     let temp_connection = online_connections.get_mut(&clone_ip).unwrap();
-                    temp_connection.ws_mpsc_transmitter.send(format!("Ack from server, here's your id: {}", String::from(clone_connection_id))).await.unwrap();
+                    temp_connection.ws_mpsc_transmitter.send(ControlMessages::Id(String::from(clone_connection_id))).await.unwrap();
 
                 }
                 ConnectionCommand::WaitingForPartner => {

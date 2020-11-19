@@ -18,12 +18,5 @@ impl ControlMessages {
         bincode::deserialize(bytes).unwrap()
     }
 
-    // I don't think the frontend can use this? Yep.. Supposedly tungstenite relies on the openssl crate :X
-    // pub fn to_binary_message(&self) -> Message {
-    //     // let message = tungstenite::Message::binary(
-    //     //     ControlMessages::serialize(&ControlMessages::Message(String::from("Hello from the server"))));
-            
-    //     tungstenite::Message::binary(self.serialize())
-        
-    // }
+
 }
