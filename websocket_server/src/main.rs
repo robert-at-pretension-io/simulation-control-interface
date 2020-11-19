@@ -6,7 +6,7 @@ use tokio::time;
 
 use futures_util::SinkExt;
 
-use tokio_tungstenite;
+use tokio_tungstenite::WebSocketStream;
 
 use std::collections::HashMap;
 
@@ -53,6 +53,24 @@ impl Connection {
         }
     }
 }
+#[instrument()]
+async fn send_message(stream : &mut WebSocketStream<TcpStream>,message : tungstenite::Message) {
+    match message {
+        tungstenite::Message::Binary(message) => {
+            info!("Sending BINARY Message From Server To Client : {:?}", &message);
+            stream.send(tungstenite::Message::Binary(message)).await.unwrap();
+        }
+        tungstenite::Message::Text(message) => {
+            info!("Sending TEXT Message From Server To Client : {:?}", &message);
+            stream.send(tungstenite::Message::Text(message)).await.unwrap();
+        }
+        tungstenite::Message::Close(_) | tungstenite::Message::Ping(_) | tungstenite::Message::Pong(_) => {
+            //
+        }
+    }
+    
+    
+}
 
 
 #[instrument]
@@ -83,12 +101,15 @@ async fn ws_connection(
 
     info!("successfully upgraded connection to stream.");
 
-    //let message = tungstenite::Message::text(String::from("hello from the server!"));
+    // let message = tungstenite::Message::text(String::from("hello from the server!"));
 
-    let message = tungstenite::Message::binary(
-        ControlMessages::serialize(&ControlMessages::Message(String::from("Hello from the server"))));
+    // let message = tungstenite::Message::binary(
+    //     ControlMessages::serialize(&ControlMessages::Message(String::from("Hello from the server"))));
 
-    ws_stream.send(message).await.unwrap();
+    send_message(&mut ws_stream, ControlMessages::ServerInitiated.to_binary_message()).await;
+
+    // ws_stream.send(message).await.unwrap();
+    // ws_stream.flush().await.unwrap();
 
     let address = ws_stream.get_ref().peer_addr().unwrap();
 

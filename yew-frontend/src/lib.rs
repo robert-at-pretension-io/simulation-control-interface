@@ -1,9 +1,16 @@
-use js_sys;
+
 use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
+
+//Each of the javascript api features must be added in both the YAML file and used here
 use web_sys::{MessageEvent, WebSocket};
+
+// Needed for converting boxed closures into js closures *🤷*
+use wasm_bindgen::JsCast;
+
+// God knows what evils this crate includes. 
 use yew::prelude::*;
 
+// This local trait is for shared objects between the frontend and the backend
 use models::ControlMessages;
 
 static WEBSOCKET_URL: &str = "ws://127.0.0.1:80";
@@ -19,7 +26,7 @@ struct Model {
 enum Msg {
     InitialPage,
     InitiateWebsocketConnectionProcess,
-    EstablishingConnectionToWebsocketServer(u8),
+    EstablishingConnectionToWebsocketServer,
     ConnectedToWebsocketServer,
     ReadyForPartner,
     UpdateUsername(String),
@@ -38,6 +45,60 @@ impl Model {
             })  }
             </>
         )
+    }
+
+    fn setup_websocket_object_callbacks(&mut self, ws : WebSocket) -> WebSocket{
+        let cloned = self.link.clone();
+
+        // The onmessage_callback handles MOOOOST of the logic of client-server communication
+        // This callback is suuuper important lol
+
+            // For small binary messages, like CBOR, Arraybuffer is more efficient than Blob handling
+        ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
+
+        
+        let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
+            if let Ok(txt) = e.data().dyn_into::<js_sys::JsString>() {
+                    //web_sys::console::log_1(&txt);
+
+                    cloned.send_message(Msg::ServerSentWsMessage(txt.into()))
+            } 
+
+            else if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
+                //console_log!("message event, received arraybuffer: {:?}", abuf);
+                let array = js_sys::Uint8Array::new(&abuf);
+                //let len = array.byte_length() as usize;
+                //console_log!("Arraybuffer received {}bytes: {:?}", len, array.to_vec());
+
+                cloned.send_message(Msg::LogEvent("Received a binary message: ".into()));
+
+                //web_sys::console::log_1(&abuf.to_string());
+
+
+                match ControlMessages::deserialize(&array.to_vec()) {
+                    ControlMessages::Id(new_id) => {
+                        //update the clients id
+                    }
+
+                    ControlMessages::Message(message) => {
+                        cloned.send_message(Msg::ServerSentWsMessage(message.into()))
+                    }
+
+                    ControlMessages::ServerInitiated => {
+                        cloned.send_message(Msg::ServerSentWsMessage(String::from("Oh.. I guess the server said hi! ... Wow. I'm so embarassed!")))
+                    }
+
+                }
+
+
+            }
+        }) as Box<dyn FnMut(MessageEvent)>);
+        // set message event handler on WebSocket
+        ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
+        // forget the callback to keep it alive
+        onmessage_callback.forget();
+
+        ws
     }
 }
 
@@ -65,31 +126,22 @@ impl Component for Model {
             }
             Msg::ServerSentWsMessage(message) => {
                 self.link.send_message(Msg::LogEvent(message));
-                false
+                true
             }
             Msg::InitiateWebsocketConnectionProcess => {
                 let ws = WebSocket::new(WEBSOCKET_URL).unwrap();
 
-                if ws.ready_state() == 1 {
-                    self.websocket = Some(ws);
 
-                    let messages : Vec<Msg> = vec!(
-                        Msg::LogEvent("The connection is open and ready to communicate.".to_string()),
-                        Msg::ConnectedToWebsocketServer
-                    );
-                    self.link.send_message_batch(messages);
-                    false
-                }
-                else {
+                let ws = self.setup_websocket_object_callbacks(ws);
 
                 self.websocket = Some(ws);
                 let messages : Vec::<Msg> = vec!(
                     Msg::LogEvent("attempting ws connection ...".to_string()),
-                    Msg::EstablishingConnectionToWebsocketServer(1),
+                    Msg::EstablishingConnectionToWebsocketServer,
             ); 
                 self.link.send_message_batch(messages);
                 false
-                }
+                
 
 
 
@@ -99,67 +151,9 @@ impl Component for Model {
                 self.user = username;
                 true
             }
-            Msg::EstablishingConnectionToWebsocketServer(attempt) => {
-                if attempt > 3 {
-                    let messages = vec![
-                        Msg::LogEvent("Ran out of connection attempts...".to_string()),
-                        Msg::InitialPage
-                    ];
-
-                    self.link.send_message_batch(messages);
-                    true
-                }
-                else {
-                let state = match &self.websocket {
-                    Some(ws) => {
-                        
-                        ws.ready_state()
-                    },
-                    None => {
-                        let messages : Vec<Msg> = vec!(
-                            Msg::LogEvent("Somehow there is no websocket...".to_string()),
-                            Msg::InitiateWebsocketConnectionProcess
-                        );
-                        self.link.send_message_batch(messages);
-                        3 // we'll just show an error because the websocket wasn't 
-                    }
-                };
-
-                self.link.send_message(Msg::LogEvent(format!("Current State: {}", state)));
-
-                if state == WebSocket::OPEN  {
-                    let messages : Vec<Msg> = vec!(
-                        Msg::LogEvent("The connection is open and ready to communicate.".to_string()),
-                        Msg::ConnectedToWebsocketServer
-                    );
-                    self.link.send_message_batch(messages);
-                   } 
-
-               else if state == WebSocket::CONNECTING  {
-                   
-                let messages : Vec<Msg> = vec!(
-                    Msg::LogEvent("Socket has been created. The connection is not yet open.".to_string()),
-                    Msg::EstablishingConnectionToWebsocketServer(attempt + 1)
-                );
-                self.link.send_message_batch(messages);
-               } 
-               
-               else if state == WebSocket::CLOSED{
-                let messages : Vec<Msg> = vec!(
-                    Msg::LogEvent("The connection is closed or couldn't be opened.".to_string()),
-                    Msg::InitiateWebsocketConnectionProcess
-                );
-                self.link.send_message_batch(messages);
-               }
-                // https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState
-                // ws.readyState is an enum with the values...
-//                  Value 	State 	    Description
-//                  0 	    CONNECTING 	Socket has been created. The connection is not yet open.
-//                  1 	    OPEN 	    The connection is open and ready to communicate.
-//                  2 	    CLOSING 	The connection is in the process of closing.
-//                  3 	    CLOSED 	    The connection is closed or couldn't be opened.
+            Msg::EstablishingConnectionToWebsocketServer => {
 true
-}
+
             }
             Msg::ConnectedToWebsocketServer => {
                 true
