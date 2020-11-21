@@ -29,6 +29,7 @@ pub enum ControlMessages {
     Client(Client),
     // The Message Direction contains the client of interest
     Message(String, MessageDirection),
+    OnlineClients(Vec<Client>),
 }
 
 impl ControlMessages {

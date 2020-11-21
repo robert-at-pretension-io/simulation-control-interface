@@ -21,6 +21,7 @@ struct Model {
     partner: Option<Client>,
     link: ComponentLink<Self>,
     websocket: Option<WebSocket>,
+    peers: Vec<Client>
 }
 
 
@@ -33,6 +34,7 @@ enum Msg {
     UpdateUsername(Client),
     LogEvent(String),
     ServerSentWsMessage(String),
+    UpdateOnlineUsers(Vec<Client>)
 }
 
 extern crate web_sys;
@@ -84,6 +86,9 @@ impl Model {
                         cloned.send_message(Msg::LogEvent(String::from("Connected To Websocket Server!")))
                     }
 
+                    ControlMessages::OnlineClients(clients) => {
+                        cloned.send_message(Msg::UpdateOnlineUsers(clients))
+                    }
                 }
 
 
@@ -108,7 +113,8 @@ impl Component for Model {
             websocket: None,
             event_log: Vec::<String>::new(),
             client: Client{user_id: String::from("Random ID"), username: String::from("Random Username")},
-            partner: None
+            partner: None,
+            peers: Vec::<Client>::new()
         }
     }
 
@@ -153,6 +159,10 @@ true
 
             }
             Msg::ConnectedToWebsocketServer => {
+                true
+            }
+            Msg::UpdateOnlineUsers(clients) => {
+                self.peers = clients;
                 true
             }
         }
