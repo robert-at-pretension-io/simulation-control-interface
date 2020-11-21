@@ -15,7 +15,7 @@ use std::net::SocketAddr;
 use log::info;
 use tracing::{instrument, Level};
 
-use models::ControlMessages;
+use models::{ControlMessages, Client, MessageDirection};
 
 
 #[derive(Debug, PartialEq, Eq)]
@@ -101,8 +101,13 @@ async fn ws_connection(
 
     info!("successfully upgraded connection to stream.");
 
+    let this_client = Client {
+        user_id : random_user_uuid.to_string(),
+        username: String::from("Bubba") 
+    };
+
     let message = tungstenite::Message::binary(
-        ControlMessages::ServerInitiated.serialize() );
+        ControlMessages::ServerInitiated(MessageDirection::ServerToClient(this_client)).serialize() );
 
     send_message(&mut ws_stream, message).await;
 
@@ -192,14 +197,14 @@ async fn status_manager(mut status_updater_rx: tokio::sync::mpsc::Receiver<(Conn
     
                     let connection_socketaddr = connection.ip_address.clone();
                     let clone_ip = connection_socketaddr.clone();
-                    let clone_connection_id = connection.connection_id.clone();
+                    let user_id = connection.connection_id.clone();
 
                     online_connections.insert(connection_socketaddr, connection);
 
 
 
                     let temp_connection = online_connections.get_mut(&clone_ip).unwrap();
-                    temp_connection.ws_mpsc_transmitter.send(ControlMessages::Id(String::from(clone_connection_id))).await.unwrap();
+                    temp_connection.ws_mpsc_transmitter.send(ControlMessages::Client(Client{user_id , username: String::from("bubba")})).await.unwrap();
 
                 }
                 ConnectionCommand::WaitingForPartner => {

@@ -11,14 +11,14 @@ use wasm_bindgen::JsCast;
 use yew::prelude::*;
 
 // This local trait is for shared objects between the frontend and the backend
-use models::ControlMessages;
+use models::{ControlMessages, Client, MessageDirection};
 
 static WEBSOCKET_URL: &str = "ws://127.0.0.1:80";
 
 struct Model {
     event_log: Vec<String>,
-    user_id: String,
-    user: String,
+    client: Client,
+    partner: Option<Client>,
     link: ComponentLink<Self>,
     websocket: Option<WebSocket>,
 }
@@ -30,7 +30,7 @@ enum Msg {
     EstablishingConnectionToWebsocketServer,
     ConnectedToWebsocketServer,
     ReadyForPartner,
-    UpdateUsername(String),
+    UpdateUsername(Client),
     LogEvent(String),
     ServerSentWsMessage(String),
 }
@@ -66,22 +66,22 @@ impl Model {
                 //let len = array.byte_length() as usize;
                 //console_log!("Arraybuffer received {}bytes: {:?}", len, array.to_vec());
 
-                cloned.send_message(Msg::LogEvent("Received a binary message: ".into()));
+                //cloned.send_message(Msg::LogEvent("Received a binary message: ".into()));
 
                 //web_sys::console::log_1(&abuf.to_string());
 
 
                 match ControlMessages::deserialize(&array.to_vec()) {
-                    ControlMessages::Id(new_id) => {
-                        cloned.send_message(Msg::UpdateUsername(new_id))
+                    ControlMessages::Client(client) => {
+                        cloned.send_message(Msg::UpdateUsername(client))
                     }
 
-                    ControlMessages::Message(message) => {
+                    ControlMessages::Message(message, directionality) => {
                         cloned.send_message(Msg::ServerSentWsMessage(message.into()))
                     }
 
-                    ControlMessages::ServerInitiated => {
-                        cloned.send_message(Msg::ServerSentWsMessage(String::from("Oh.. I guess the server said hi! ... Wow. I'm so embarassed!")))
+                    ControlMessages::ServerInitiated(directionality) => {
+                        cloned.send_message(Msg::LogEvent(String::from("Connected To Websocket Server!")))
                     }
 
                 }
@@ -107,8 +107,8 @@ impl Component for Model {
             link,
             websocket: None,
             event_log: Vec::<String>::new(),
-            user_id: String::from("Random ID"),
-            user: String::from("Random User"),
+            client: Client{user_id: String::from("Random ID"), username: String::from("Random Username")},
+            partner: None
         }
     }
 
@@ -144,8 +144,8 @@ impl Component for Model {
 
             }
             Msg::ReadyForPartner => false,
-            Msg::UpdateUsername(username) => {
-                self.user = username;
+            Msg::UpdateUsername(client) => {
+                self.client = client;
                 true
             }
             Msg::EstablishingConnectionToWebsocketServer => {
@@ -168,7 +168,7 @@ true
                         <h1>
                         {"Welcome!"}
                         </h1>
-                        <p> {format!("How's it going {}",self.user)} </p>
+                        <p> {format!("How's it going {}",self.client.username)} </p>
 
                         <div>
                         <p> {format!("The following details the event log of the application:")} </p>
