@@ -84,9 +84,9 @@ async fn ws_connection(
 
     let (tx, mut rx) = process_complete_channel_tx_rx;
 
-    let ip_address = stream.peer_addr().unwrap();
+    let socket_address = stream.peer_addr().unwrap();
 
-    let this_connection = Connection::new(random_user_uuid.clone(), ip_address, tx);
+    let this_connection = Connection::new(random_user_uuid.clone(), socket_address, tx);
 
     tx_status_manager
         .send((ConnectionCommand::Online, Some(this_connection)))
@@ -102,12 +102,13 @@ async fn ws_connection(
     info!("successfully upgraded connection to stream.");
 
     let this_client = Client {
+        username: String::from("Bubba"),
         user_id : random_user_uuid.to_string(),
-        username: String::from("Bubba") 
+        current_socket_addr: Some(socket_address)
     };
 
     let message = tungstenite::Message::binary(
-        ControlMessages::ServerInitiated(MessageDirection::ServerToClient(this_client)).serialize() );
+        ControlMessages::ServerInitiated(this_client).serialize() );
 
     send_message(&mut ws_stream, message).await;
 
@@ -204,7 +205,7 @@ async fn status_manager(mut status_updater_rx: tokio::sync::mpsc::Receiver<(Conn
 
 
                     let temp_connection = online_connections.get_mut(&clone_ip).unwrap();
-                    temp_connection.ws_mpsc_transmitter.send(ControlMessages::Client(Client{user_id , username: String::from("bubba")})).await.unwrap();
+                    temp_connection.ws_mpsc_transmitter.send(ControlMessages::Client(Client{user_id , username: String::from("bubba"), current_socket_addr: Some(connection_socketaddr)})).await.unwrap();
 
                 }
                 ConnectionCommand::WaitingForPartner => {

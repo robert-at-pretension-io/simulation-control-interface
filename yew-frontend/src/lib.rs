@@ -1,3 +1,4 @@
+#![recursion_limit="256"]
 
 use wasm_bindgen::prelude::*;
 
@@ -11,7 +12,14 @@ use wasm_bindgen::JsCast;
 use yew::prelude::*;
 
 // This local trait is for shared objects between the frontend and the backend
-use models::{ControlMessages, Client, MessageDirection};
+use models::{ControlMessages, Client};
+
+use std::collections::HashSet;
+#[derive(Hash, Eq, PartialEq, Debug)]
+enum State {
+    ConnectedToWebsocketServer,
+    ConnectedToRtcPeer,
+}
 
 static WEBSOCKET_URL: &str = "ws://127.0.0.1:80";
 
@@ -21,20 +29,20 @@ struct Model {
     partner: Option<Client>,
     link: ComponentLink<Self>,
     websocket: Option<WebSocket>,
-    peers: Vec<Client>
+    peers: HashSet<Client>,
+    states : HashSet<State>
 }
 
 
 enum Msg {
-    InitialPage,
     InitiateWebsocketConnectionProcess,
-    EstablishingConnectionToWebsocketServer,
-    ConnectedToWebsocketServer,
-    ReadyForPartner,
     UpdateUsername(Client),
     LogEvent(String),
     ServerSentWsMessage(String),
-    UpdateOnlineUsers(Vec<Client>)
+    UpdateOnlineUsers(HashSet<Client>),
+    AddState(State),
+    RemoveState(State),
+    CloseWebsocketConnection
 }
 
 extern crate web_sys;
@@ -53,41 +61,41 @@ impl Model {
     fn setup_websocket_object_callbacks(&mut self, ws : WebSocket) -> WebSocket{
         let cloned = self.link.clone();
 
-        // The onmessage_callback handles MOOOOST of the logic of client-server communication
-        // This callback is suuuper important lol
-
-            // For small binary messages, like CBOR, Arraybuffer is more efficient than Blob handling
         ws.set_binary_type(web_sys::BinaryType::Arraybuffer);
 
         
         let onmessage_callback = Closure::wrap(Box::new(move |e: MessageEvent| {
             // The only type of message that will be officially recognized is the almighty ArrayBuffer Binary Data!
             if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
-                //console_log!("message event, received arraybuffer: {:?}", abuf);
                 let array = js_sys::Uint8Array::new(&abuf);
-                //let len = array.byte_length() as usize;
-                //console_log!("Arraybuffer received {}bytes: {:?}", len, array.to_vec());
-
-                //cloned.send_message(Msg::LogEvent("Received a binary message: ".into()));
-
-                //web_sys::console::log_1(&abuf.to_string());
-
 
                 match ControlMessages::deserialize(&array.to_vec()) {
-                    ControlMessages::Client(client) => {
-                        cloned.send_message(Msg::UpdateUsername(client))
+                    Ok(result) => {
+                        match result {
+                            ControlMessages::Client(client) => {
+                                cloned.send_message(Msg::UpdateUsername(client))
+                            }
+        
+                            ControlMessages::Message(message, directionality) => {
+                                cloned.send_message(Msg::ServerSentWsMessage(message));
+                            }
+        
+                            ControlMessages::ServerInitiated(info) => {
+                            //     let messages = vec!(Msg::LogEvent(format!("{:?} Connected To Websocket Server!", info)), 
+                            //     Msg::AddState(State::ConnectedToWebsocketServer)
+                            // );
+                            //     cloned.send_message_batch(messages);
+        
+                                cloned.send_message(Msg::LogEvent(format!("{:?} Connected To Websocket Server!", info)))
+                            }
+        
+                            ControlMessages::OnlineClients(clients) => {
+                                cloned.send_message(Msg::UpdateOnlineUsers(clients))
+                            }
+                        }
                     }
-
-                    ControlMessages::Message(message, directionality) => {
-                        cloned.send_message(Msg::ServerSentWsMessage(message.into()))
-                    }
-
-                    ControlMessages::ServerInitiated(directionality) => {
-                        cloned.send_message(Msg::LogEvent(String::from("Connected To Websocket Server!")))
-                    }
-
-                    ControlMessages::OnlineClients(clients) => {
-                        cloned.send_message(Msg::UpdateOnlineUsers(clients))
+                    Err(oh_no) => {
+                        cloned.send_message(Msg::ServerSentWsMessage(oh_no.to_string()));
                     }
                 }
 
@@ -112,16 +120,34 @@ impl Component for Model {
             link,
             websocket: None,
             event_log: Vec::<String>::new(),
-            client: Client{user_id: String::from("Random ID"), username: String::from("Random Username")},
+            client: Client{user_id: String::from("Random ID"), username: String::from("Random Username"), current_socket_addr: None},
             partner: None,
-            peers: Vec::<Client>::new()
+            peers: HashSet::<Client>::new(),
+            states: HashSet::<State>::new(),
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
-            Msg::InitialPage => {
-                true
+            Msg::CloseWebsocketConnection => {
+                let ws = self.websocket.take();
+
+                match ws {
+                    Some(ws) => {
+                        ws.close().unwrap();
+                        self.states.remove(&State::ConnectedToWebsocketServer)
+                    },
+                    None => {
+                        self.states.remove(&State::ConnectedToWebsocketServer)
+                    }
+                }
+            },
+            Msg::AddState(state) =>
+            {self.states.insert(state)
+            }
+            Msg::RemoveState(state) =>
+            {
+                self.states.remove(&state)
             }
             Msg::LogEvent(event) => {
                 self.event_log.push(event);
@@ -132,33 +158,33 @@ impl Component for Model {
                 true
             }
             Msg::InitiateWebsocketConnectionProcess => {
-                let ws = WebSocket::new(WEBSOCKET_URL).unwrap();
+                match WebSocket::new(WEBSOCKET_URL) {
+                    Ok(ws) => {
+                        let ws = self.setup_websocket_object_callbacks(ws);
+
+                        self.websocket = Some(ws);
+                        let messages : Vec::<Msg> = vec!(
+                            Msg::LogEvent("attempting ws connection ...".to_string()),
+                            Msg::AddState(State::ConnectedToWebsocketServer)
+                    ); 
+                        self.link.send_message_batch(messages);
+                        true
+                    }
+                    Err(err) => {
+                        self.link.send_message(Msg::LogEvent(format!("error: {:?}", err)));
+                        true
+                    }
+                }
 
 
-                let ws = self.setup_websocket_object_callbacks(ws);
-
-                self.websocket = Some(ws);
-                let messages : Vec::<Msg> = vec!(
-                    Msg::LogEvent("attempting ws connection ...".to_string()),
-                    Msg::EstablishingConnectionToWebsocketServer,
-            ); 
-                self.link.send_message_batch(messages);
-                false
+                
                 
 
 
 
             }
-            Msg::ReadyForPartner => false,
             Msg::UpdateUsername(client) => {
                 self.client = client;
-                true
-            }
-            Msg::EstablishingConnectionToWebsocketServer => {
-true
-
-            }
-            Msg::ConnectedToWebsocketServer => {
                 true
             }
             Msg::UpdateOnlineUsers(clients) => {
@@ -185,12 +211,29 @@ true
                         {self.show_events_in_table() }
                         </div>
 
-                        <button onclick=self.link.callback(|_| {
-                            Msg::InitiateWebsocketConnectionProcess
-                        })>
-                            {"Click here to connect to the server."}
-                        </button>
+                        // <button onclick=self.link.callback(|_| {
+                        //     Msg::InitiateWebsocketConnectionProcess
+                        // })>
+                        //     {"Click here to connect to the server."}
+                        // </button>
 
+                        {
+                            if (!self.states.contains(&State::ConnectedToWebsocketServer)){
+                            html!(<button onclick=self.link.callback(|_| {
+                                Msg::InitiateWebsocketConnectionProcess
+                            })>
+                                {"Click here to connect to the server."}
+                            </button>)}
+                            else {
+                                html!(<button onclick=self.link.callback(|_| {
+                                    Msg::CloseWebsocketConnection
+                                })>
+                                    {"Disconnect"}
+                                </button>)
+                            }
+                        
+
+                    }
 
 
                     </div>
