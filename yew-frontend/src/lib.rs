@@ -135,7 +135,8 @@ impl Component for Model {
                 match ws {
                     Some(ws) => {
                         ws.close().unwrap();
-                        self.states.remove(&State::ConnectedToWebsocketServer)
+                        self.link.send_message(Msg::RemoveState(State::ConnectedToWebsocketServer));
+                        true
                     },
                     None => {
                         self.states.remove(&State::ConnectedToWebsocketServer)
@@ -143,11 +144,32 @@ impl Component for Model {
                 }
             },
             Msg::AddState(state) =>
-            {self.states.insert(state)
+            {
+                
+                match self.states.insert(state) {
+                    true => {
+
+                        true
+                    },
+                    false => {
+
+                        false
+                    }
+                }
             }
             Msg::RemoveState(state) =>
             {
-                self.states.remove(&state)
+                match self.states.remove(&state) {
+                    true => {
+
+                self.link.send_message(Msg::LogEvent(format!("Removed the following state: {:?}", state)));
+                        true
+                    }
+                    false => {
+                        self.link.send_message(Msg::LogEvent(format!("Tried removing the following state: {:?}. But it wasn't in the current set of states.", state)));
+                        false
+                    }
+                }
             }
             Msg::LogEvent(event) => {
                 self.event_log.push(event);
