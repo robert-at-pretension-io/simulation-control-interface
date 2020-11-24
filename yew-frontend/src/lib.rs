@@ -52,9 +52,17 @@ impl Model {
         html!(
             <>
             {for self.event_log.iter().map(|event| {
-                html!(<div> <p> {event} </p> </div>)
+                html!(<li> {event} </li>)
             })  }
             </>
+        )
+    }
+
+    fn show_peers_online(&self) -> Html {
+        html!(
+            {for self.peers.iter().map(|client| {
+                html!(<li> {format!("{:?} : {:?}", client.username , client.current_socket_addr)} </li>)
+            })  }
         )
     }
 
@@ -247,11 +255,19 @@ impl Component for Model {
                                 {"Click here to connect to the server."}
                             </button>)}
                             else {
-                                html!(<button onclick=self.link.callback(|_| {
-                                    Msg::CloseWebsocketConnection
-                                })>
-                                    {"Disconnect"}
-                                </button>)
+                                html!(<div> 
+                                    <div> 
+                                    <h1> {"Peers online:"} </h1>
+
+                                    </div>
+
+                                    <button onclick=self.link.callback(|_| {
+                                        Msg::CloseWebsocketConnection
+                                    })>
+                                        {"Disconnect"}
+                                    </button>
+                                    
+                                    </div>)
                             }
                         
 
