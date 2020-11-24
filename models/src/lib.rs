@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 
 
 
-#[derive(Debug, Serialize,Deserialize, Eq, Hash)]
+#[derive(Debug, Serialize,Deserialize, Eq, Hash, Clone)]
 pub struct Client {
     pub username: String,
     pub user_id: String,
@@ -20,7 +20,7 @@ impl PartialEq for Client {
     }
 }
 
-#[derive(Debug, Serialize,Deserialize)]
+#[derive(Debug, Serialize,Deserialize, Clone, Eq, PartialEq)]
 pub enum MessageDirection {
     ClientToServer(Client),
     ServerToClient(Client),
@@ -28,15 +28,20 @@ pub enum MessageDirection {
     ClientToClient(Client,Client)
 }
 
-#[derive(Debug, Serialize,Deserialize)]
+type RoundNumber = u64;
+
+#[derive(Debug, Serialize,Deserialize, Clone)]
 pub enum ControlMessages {
     /// When the server is initiated, the server sends this to the client and the client responds in turn (of course, changing the MessageDirection).
     ServerInitiated(Client),
     /// This is sent from the server to the client in order to uniquely identify the client... Will need to store this in a database
-    Client(Client),
-    // The Message Direction contains the client of interest
+    ClientInfo(Client),
+    /// The Message Direction contains the sender and intended receiver
     Message(String, MessageDirection),
-    OnlineClients(HashSet<Client>),
+    /// This will show the client the available users on any particular round
+    OnlineClients(HashSet<Client>, RoundNumber),
+    /// This indicates that this client is ready to be paired at whatever future round
+    ReadyForPartner(MessageDirection),
 }
 
 impl ControlMessages {
