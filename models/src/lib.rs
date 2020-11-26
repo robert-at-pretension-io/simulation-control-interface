@@ -6,6 +6,7 @@ use std::net::SocketAddr;
 
 
 
+
 #[derive(Debug, Serialize,Deserialize, Eq, Hash, Clone)]
 pub struct Client {
     pub username: String,
@@ -41,7 +42,10 @@ pub enum ControlMessages {
     /// This will show the client the available users on any particular round
     OnlineClients(HashSet<Client>, RoundNumber),
     /// This indicates that this client is ready to be paired at whatever future round
-    ReadyForPartner(MessageDirection),
+    ReadyForPartner(Client),
+    /// This is used for ending the websocket connection between the client and the server. The message direction indicates who has initiated the closure.
+    ClosedConnection(Client),
+    AttachSocketToClient(Client, SocketAddr),
 }
 
 impl ControlMessages {

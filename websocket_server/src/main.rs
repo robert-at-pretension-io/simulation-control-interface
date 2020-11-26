@@ -1,6 +1,9 @@
-use tokio::{sync::mpsc::Receiver, net::{TcpListener, TcpStream}};
 use tokio::stream::StreamExt;
 use tokio::sync::mpsc;
+use tokio::{
+    net::{TcpListener, TcpStream},
+    sync::mpsc::Receiver,
+};
 
 use tokio::time;
 
@@ -15,67 +18,47 @@ use std::net::SocketAddr;
 use log::info;
 use tracing::{instrument, Level};
 
-use models::{ControlMessages, Client, MessageDirection};
+use models::{Client, ControlMessages, MessageDirection};
 
-
-#[derive(Debug, PartialEq, Eq)]
-enum ConnectionCommand {
-    ClosedConnection(SocketAddr),
-    Online,
-    //NeedsWebRtcUpgrade,
-    //WithPartner,
-    WaitingForPartner,
-}
-
-impl Default for ConnectionCommand {
-    fn default() -> Self {
-        ConnectionCommand::Online
-    }
-}
-
-#[derive(Debug)]
-struct Connection {
-    client: Client,
-    ws_mpsc_transmitter: mpsc::Sender<ControlMessages>,
-}
-
-impl Connection {
-    fn new(
-        client: Client,
-        ws_mpsc_transmitter: mpsc::Sender<ControlMessages>,
-    ) -> Self {
-        Connection {
-            client,
-            ws_mpsc_transmitter,
-        }
-    }
-}
 #[instrument()]
-async fn send_message(stream : &mut WebSocketStream<TcpStream>,message : tungstenite::Message) {
+async fn send_message(stream: &mut WebSocketStream<TcpStream>, message: tungstenite::Message) {
     match message {
         tungstenite::Message::Binary(message) => {
-            info!("Sending BINARY Message From Server To Client : {:?}", &message);
-            stream.send(tungstenite::Message::Binary(message)).await.unwrap();
+            info!(
+                "Sending BINARY Message From Server To Client : {:?}",
+                &message
+            );
+            stream
+                .send(tungstenite::Message::Binary(message))
+                .await
+                .unwrap();
         }
         tungstenite::Message::Text(message) => {
-            info!("Sending TEXT Message From Server To Client : {:?}", &message);
-            stream.send(tungstenite::Message::Text(message)).await.unwrap();
+            info!(
+                "Sending TEXT Message From Server To Client : {:?}",
+                &message
+            );
+            stream
+                .send(tungstenite::Message::Text(message))
+                .await
+                .unwrap();
         }
-        tungstenite::Message::Close(_) | tungstenite::Message::Ping(_) | tungstenite::Message::Pong(_) => {
+        tungstenite::Message::Close(_)
+        | tungstenite::Message::Ping(_)
+        | tungstenite::Message::Pong(_) => {
             //
         }
     }
-    
-    
 }
 
-
 #[instrument]
-async fn ws_connection(
-    mut tx_status_manager: mpsc::Sender<(ConnectionCommand, Option<Connection>)>,
-    process_complete_channel_tx_rx: (mpsc::Sender<ControlMessages>, mpsc::Receiver<ControlMessages>),
+async fn establish_ws_connection(
+    mut tx_server_state_manager: mpsc::Sender<(ControlMessages, Option<mpsc::Sender<ControlMessages>>)>,
+    process_complete_channel_tx_rx: (
+        mpsc::Sender<ControlMessages>,
+        mpsc::Receiver<ControlMessages>,
+    ),
     stream: TcpStream,
-    //ws_transmitter: mpsc::Sender<String>,
 ) {
     let random_user_uuid = uuid::Uuid::new_v4().to_string();
 
@@ -85,33 +68,24 @@ async fn ws_connection(
 
     let this_client = Client {
         username: String::from("Bubba"),
-        user_id : random_user_uuid.to_string(),
-        current_socket_addr: Some(socket_address)
+        user_id: random_user_uuid.to_string(),
+        current_socket_addr: Some(socket_address),
     };
-    
 
-    let this_connection = Connection::new(this_client.clone(), tx);
+    let client_messager: mpsc::Sender<ControlMessages> = tx;
 
-    tx_status_manager
-        .send((ConnectionCommand::Online, Some(this_connection)))
+    tx_server_state_manager
+        .send((ControlMessages::ServerInitiated(this_client.clone()), Some(client_messager)))
         .await
         .expect("The connection was closed before even getting to update the status within a system. The odds of this happening normally are extremely low... Like someone would have to connection and then almost instantaneously close the connection:[");
-
-    info!("new client! Let's try upgradding them to a websocket connection on port 80!");
 
     let mut ws_stream = tokio_tungstenite::accept_async(stream)
         .await
         .expect("failed to accept websocket.");
 
-    info!("successfully upgraded connection to stream.");
-
-
-
-    let message = tungstenite::Message::binary(
-        ControlMessages::ServerInitiated(this_client.clone()).serialize() );
-
-    send_message(&mut ws_stream, message).await;
-
+    send_message(&mut ws_stream, tungstenite::Message::binary(
+        ControlMessages::ServerInitiated(this_client.clone()).serialize()
+    )).await;
 
     let address = ws_stream.get_ref().peer_addr().unwrap();
 
@@ -131,10 +105,10 @@ async fn ws_connection(
                 if val.unwrap().is_close() {
             info!("The client is trying to close the connection");
 
-            
 
-            tx_status_manager
-                .send((ConnectionCommand::ClosedConnection(address),None))
+
+            tx_server_state_manager
+                .send((ControlMessages::ClosedConnection(this_client.clone()),None))
                 .await
                 .expect("The connection was closed :[");
             break; // I think this break makes it so that the function returns :o?
@@ -164,13 +138,10 @@ async fn game_loop(
 }
 
 #[instrument]
-async fn status_manager(mut status_updater_rx: Receiver<(ConnectionCommand,Option<Connection>)>) {
-    let mut online_connections = HashMap::<SocketAddr, Connection>::new();
+async fn server_state_manager(mut status_updater_rx: Receiver<ControlMessages>, mut client_controller_channel : Option<mpsc::Sender<ControlMessages>>) -> ! {
+    let mut online_connections = HashMap::<Client, mpsc::Sender<ControlMessages>>::new();
 
-    //Connection
-
-    let (status_processer_notifier_tx, mut status_processer_notifier_rx) 
-    = mpsc::channel::<i32>(10);
+    let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<i32>(10);
 
     tokio::spawn(async move { game_loop(status_processer_notifier_tx, 60).await });
 
@@ -185,44 +156,34 @@ async fn status_manager(mut status_updater_rx: Receiver<(ConnectionCommand,Optio
             },
 
             some_connection = status_updater_rx.recv() => {
-                let (connection_command, optional_connection) = some_connection.unwrap();
+                let control_message = some_connection.unwrap();
 
             info!("Received connection in status_manager");
 
-            match connection_command {
-                ConnectionCommand::Online => {
-                    let connection = optional_connection.unwrap();
-    
-                    let connection_socketaddr = connection.client.current_socket_addr.unwrap().clone();
-                    let clone_ip = connection_socketaddr.clone();
-                    let user_id = connection.client.user_id.clone();
-
-                    online_connections.insert(connection_socketaddr, connection);
+            match control_message {
+                ControlMessages::ServerInitiated(client) => {
+                    let mut client_connection = client_controller_channel.unwrap();
 
 
+                    client_connection.send(ControlMessages::ClientInfo(client.clone()));
 
-                    let temp_connection = online_connections.get_mut(&clone_ip).unwrap();
-                    temp_connection.ws_mpsc_transmitter.send(ControlMessages::ClientInfo(Client{user_id , username: String::from("bubba"), current_socket_addr: Some(connection_socketaddr)})).await.unwrap();
+                    online_connections.insert(client, client_connection);
+
 
                 }
-                ConnectionCommand::WaitingForPartner => {
-                    info!("Would like to get partner please");
+                ControlMessages::ReadyForPartner(client) => {
+                    info!("{:?} would like to get partner please", client.user_id);
                 }
-                ConnectionCommand::ClosedConnection(socket_address) => {
-                    //online_connections.retain(|k,v| {e.connection_status != ConnectionCommand::ClosedConnection })
+                ControlMessages::ClosedConnection(client) => {
 
+                    online_connections.remove_entry(&client);
 
-                    online_connections.remove_entry(&socket_address);
-
-                    
-
-                    // connection_status.insert(connection.ip_address, ConnectionCommand::ClosedConnection).expect("A connection must have a pre-existing status before closing?... right?");
                 }
             }
-            info!("All connections status:");
-            online_connections.iter().for_each(|v| {
-                info!("{} has status: {:?}", v.0, connection_command);
-            });
+            // info!("All connections status:");
+            // online_connections.iter().for_each(|v| {
+            //     info!("{} has status: {:?}", v.0, control_message.);
+            // });
             }
 
 
@@ -243,12 +204,13 @@ async fn main() {
 
     let mut listener = TcpListener::bind("127.0.0.1:80").await.unwrap();
 
-    let (status_updater_tx, status_updater_rx) = mpsc::channel::<(ConnectionCommand, Option<Connection>)>(10);
+    let (status_updater_tx, status_updater_rx) =
+        mpsc::channel::<ControlMessages>(10);
 
     // Connection status manager, user/connection states are updated here but no "functionality" is really performed.
     tokio::spawn(async {
         info!("setting up a status manager");
-        status_manager(status_updater_rx).await
+        server_state_manager(status_updater_rx).await
     });
 
     // websocket manager
@@ -261,7 +223,7 @@ async fn main() {
         // Both the tx and rx should will be sent to ws_connection. The tx part will then be sent to the status updater as a message
 
         tokio::spawn(async {
-            ws_connection(
+            establish_ws_connection(
                 status_updater_tx_clone,
                 process_complete_channel_tx_rx,
                 stream,
