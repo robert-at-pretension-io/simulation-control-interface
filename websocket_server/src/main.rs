@@ -1,4 +1,4 @@
-use tokio::net::{TcpListener, TcpStream};
+use tokio::{sync::mpsc::Receiver, net::{TcpListener, TcpStream}};
 use tokio::stream::StreamExt;
 use tokio::sync::mpsc;
 
@@ -35,20 +35,17 @@ impl Default for ConnectionCommand {
 
 #[derive(Debug)]
 struct Connection {
-    connection_id: String,
-    ip_address: SocketAddr,
+    client: Client,
     ws_mpsc_transmitter: mpsc::Sender<ControlMessages>,
 }
 
 impl Connection {
     fn new(
-        connection_id: String,
-        ip_address: SocketAddr,
+        client: Client,
         ws_mpsc_transmitter: mpsc::Sender<ControlMessages>,
     ) -> Self {
         Connection {
-            connection_id,
-            ip_address,
+            client,
             ws_mpsc_transmitter,
         }
     }
@@ -86,7 +83,14 @@ async fn ws_connection(
 
     let socket_address = stream.peer_addr().unwrap();
 
-    let this_connection = Connection::new(random_user_uuid.clone(), socket_address, tx);
+    let this_client = Client {
+        username: String::from("Bubba"),
+        user_id : random_user_uuid.to_string(),
+        current_socket_addr: Some(socket_address)
+    };
+    
+
+    let this_connection = Connection::new(this_client.clone(), tx);
 
     tx_status_manager
         .send((ConnectionCommand::Online, Some(this_connection)))
@@ -101,14 +105,10 @@ async fn ws_connection(
 
     info!("successfully upgraded connection to stream.");
 
-    let this_client = Client {
-        username: String::from("Bubba"),
-        user_id : random_user_uuid.to_string(),
-        current_socket_addr: Some(socket_address)
-    };
+
 
     let message = tungstenite::Message::binary(
-        ControlMessages::ServerInitiated(this_client).serialize() );
+        ControlMessages::ServerInitiated(this_client.clone()).serialize() );
 
     send_message(&mut ws_stream, message).await;
 
@@ -120,12 +120,7 @@ async fn ws_connection(
 
             val = rx.next() => {
             if val.is_some() {
-
-                info!("looky! {:?}... \n This indicates that the status manager is able to comunicate back to the client through the websocket!", &val);
-
-                let message = tungstenite::Message::Binary(val.unwrap().serialize());
-
-                ws_stream.send(message).await.unwrap();
+                ws_stream.send(tungstenite::Message::Binary(val.unwrap().serialize())).await.unwrap();
 
             }
             },
@@ -136,8 +131,10 @@ async fn ws_connection(
                 if val.unwrap().is_close() {
             info!("The client is trying to close the connection");
 
+            
+
             tx_status_manager
-                .send((ConnectionCommand::ClosedConnection(address.clone()),None))
+                .send((ConnectionCommand::ClosedConnection(address),None))
                 .await
                 .expect("The connection was closed :[");
             break; // I think this break makes it so that the function returns :o?
@@ -167,7 +164,7 @@ async fn game_loop(
 }
 
 #[instrument]
-async fn status_manager(mut status_updater_rx: tokio::sync::mpsc::Receiver<(ConnectionCommand,Option<Connection>)>) {
+async fn status_manager(mut status_updater_rx: Receiver<(ConnectionCommand,Option<Connection>)>) {
     let mut online_connections = HashMap::<SocketAddr, Connection>::new();
 
     //Connection
@@ -196,26 +193,28 @@ async fn status_manager(mut status_updater_rx: tokio::sync::mpsc::Receiver<(Conn
                 ConnectionCommand::Online => {
                     let connection = optional_connection.unwrap();
     
-                    let connection_socketaddr = connection.ip_address.clone();
+                    let connection_socketaddr = connection.client.current_socket_addr.unwrap().clone();
                     let clone_ip = connection_socketaddr.clone();
-                    let user_id = connection.connection_id.clone();
+                    let user_id = connection.client.user_id.clone();
 
                     online_connections.insert(connection_socketaddr, connection);
 
 
 
                     let temp_connection = online_connections.get_mut(&clone_ip).unwrap();
-                    temp_connection.ws_mpsc_transmitter.send(ControlMessages::Client(Client{user_id , username: String::from("bubba"), current_socket_addr: Some(connection_socketaddr)})).await.unwrap();
+                    temp_connection.ws_mpsc_transmitter.send(ControlMessages::ClientInfo(Client{user_id , username: String::from("bubba"), current_socket_addr: Some(connection_socketaddr)})).await.unwrap();
 
                 }
                 ConnectionCommand::WaitingForPartner => {
                     info!("Would like to get partner please");
                 }
-                ConnectionCommand::ClosedConnection(socketaddr) => {
+                ConnectionCommand::ClosedConnection(socket_address) => {
                     //online_connections.retain(|k,v| {e.connection_status != ConnectionCommand::ClosedConnection })
 
 
-                    online_connections.remove_entry(&socketaddr);
+                    online_connections.remove_entry(&socket_address);
+
+                    
 
                     // connection_status.insert(connection.ip_address, ConnectionCommand::ClosedConnection).expect("A connection must have a pre-existing status before closing?... right?");
                 }
