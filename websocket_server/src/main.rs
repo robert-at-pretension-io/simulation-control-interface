@@ -138,7 +138,7 @@ async fn game_loop(
 }
 
 #[instrument]
-async fn server_state_manager(mut status_updater_rx: Receiver<ControlMessages>, mut client_controller_channel : Option<mpsc::Sender<ControlMessages>>) -> ! {
+async fn server_state_manager(mut status_updater_rx: Receiver<ControlMessages>, client_controller_channel : Option<mpsc::Sender<ControlMessages>) -> ! {
     let mut online_connections = HashMap::<Client, mpsc::Sender<ControlMessages>>::new();
 
     let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<i32>(10);
@@ -162,7 +162,7 @@ async fn server_state_manager(mut status_updater_rx: Receiver<ControlMessages>, 
 
             match control_message {
                 ControlMessages::ServerInitiated(client) => {
-                    let mut client_connection = client_controller_channel.unwrap();
+                    let mut client_connection = client_controller_channel.take();
 
 
                     client_connection.send(ControlMessages::ClientInfo(client.clone()));
@@ -179,6 +179,7 @@ async fn server_state_manager(mut status_updater_rx: Receiver<ControlMessages>, 
                     online_connections.remove_entry(&client);
 
                 }
+                
             }
             // info!("All connections status:");
             // online_connections.iter().for_each(|v| {
@@ -224,7 +225,7 @@ async fn main() {
 
         tokio::spawn(async {
             establish_ws_connection(
-                status_updater_tx_clone,
+                Some(status_updater_tx_clone),
                 process_complete_channel_tx_rx,
                 stream,
             )
