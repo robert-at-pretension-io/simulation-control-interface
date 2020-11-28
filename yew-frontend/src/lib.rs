@@ -25,7 +25,7 @@ static WEBSOCKET_URL: &str = "ws://127.0.0.1:80";
 
 struct Model {
     event_log: Vec<String>,
-    client: Client,
+    client: Option<Client>,
     partner: Option<Client>,
     link: ComponentLink<Self>,
     websocket: Option<WebSocket>,
@@ -33,7 +33,19 @@ struct Model {
     states: HashSet<State>,
 }
 
+impl Model {
+    fn reset_state(&mut self) {
+            self.client = None;
+            self.partner =  None;
+            self.websocket = None;
+            self.peers = HashSet::new();
+            self.states = HashSet::new();
+            
+    }
+}
+
 enum Msg {
+    ResetPage,
     InitiateWebsocketConnectionProcess,
     UpdateUsername(Client),
     LogEvent(String),
@@ -105,6 +117,9 @@ impl Model {
                             cloned.send_message(Msg::UpdateOnlineUsers(clients))
                         }
                         ControlMessages::ReadyForPartner(direction) => {}
+                        ControlMessages::ClosedConnection(_) => {
+                            cloned.send_message(Msg::ResetPage)
+                        }
                     },
                     Err(oh_no) => {
                         cloned.send_message(Msg::ServerSentWsMessage(oh_no.to_string()));
@@ -130,11 +145,7 @@ impl Component for Model {
             link,
             websocket: None,
             event_log: Vec::<String>::new(),
-            client: Client {
-                user_id: String::from("Random ID"),
-                username: String::from("Random Username"),
-                current_socket_addr: None,
-            },
+            client: None,
             partner: None,
             peers: HashSet::<Client>::new(),
             states: HashSet::<State>::new(),
@@ -143,6 +154,10 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::ResetPage => {
+                self.reset_state();
+                true
+            }
             Msg::SendWsMessage(control_message) => {
                 self.link.send_message(Msg::LogEvent(format!(
                     "Sending Message to server: {:?}",
@@ -173,17 +188,10 @@ impl Component for Model {
                     ControlMessages::OnlineClients(_, _) => self.link.send_message(Msg::LogEvent(
                         format!("OnlineClients isn't implemented on the client side."),
                     )),
-                    ControlMessages::ReadyForPartner(message_direction) => {
-                        match message_direction {
-                            MessageDirection::ServerToClient(_) => {},
-                            MessageDirection::ClientToServer(_) => {
-                                self.send_ws_message(&control_message.serialize());
-                            },
-                            MessageDirection::ClientToClient(_, _) => {
-                                // This will be handled by WebRTC connection
-                            }
-                        }
+                    ControlMessages::ReadyForPartner(client) => {
+                        self.send_ws_message(&ControlMessages::ReadyForPartner(client).serialize())
                     }
+                    ControlMessages::ClosedConnection(_) => {}
                 }
 
                 true
@@ -245,7 +253,7 @@ impl Component for Model {
                 }
             },
             Msg::UpdateUsername(client) => {
-                self.client = client;
+                self.client = Some(client);
                 true
             }
             Msg::UpdateOnlineUsers(clients) => {
@@ -265,8 +273,6 @@ impl Component for Model {
                 <h1>
                 {"Welcome!"}
                 </h1>
-                <p> {format!("How's it going {}",self.client.username)} </p>
-
                 <div>
                 <p> {format!("The following details the event log of the application:")} </p>
                 {self.show_events_in_table() }
