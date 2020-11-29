@@ -131,8 +131,11 @@ async fn establish_and_maintain_each_client_ws_connection(
 
 
                         }
-                        Message::Ping(_) | Message::Pong(_)  => {
-                            info!("ping, pong or close message received")
+                        Message::Ping(_)  => {
+                            info!("ping message received")
+                        }
+                        Message::Pong(_) => {
+                            info!("pong message received")
                         }
                     }
 
@@ -143,6 +146,16 @@ async fn establish_and_maintain_each_client_ws_connection(
             },
         };
     }
+}
+
+#[instrument]
+async fn send_messages_to_all_online_clients(clients : &mut  Vec<mpsc::Sender<ControlMessages>>, message : ControlMessages) {
+
+    for client in clients.iter_mut() {
+        let message = message.clone();
+        client.send(message).await.unwrap();
+    }
+
 }
 
 #[instrument]
@@ -201,10 +214,14 @@ async fn server_global_state_manager(
 
 
                     client_connection.send(ControlMessages::ClientInfo(client.clone())).await.unwrap();
+                    
 
                     online_connections.insert(client, client_connection);
 
-
+                    let keys : HashSet<Client> = online_connections.keys().cloned().collect();
+                    let mut clients : Vec<mpsc::Sender<ControlMessages>> = online_connections.values().cloned().collect();
+                    send_messages_to_all_online_clients(&mut clients, ControlMessages::OnlineClients(keys, current_round)).await
+                    
                 }
                 ControlMessages::ClientInfo(_client) => {
                     // ? Needs to be more specific what this should do on the server... maybe this problem will be taken care of when the ControlMessages are segmented based on where the message should be interpretted
@@ -227,6 +244,10 @@ async fn server_global_state_manager(
 
                     online_connections.remove_entry(&client);
 
+                    
+                    let keys : HashSet<Client> = online_connections.keys().cloned().collect();
+                    let mut clients : Vec<mpsc::Sender<ControlMessages>> = online_connections.values().cloned().collect();
+                    send_messages_to_all_online_clients(&mut clients, ControlMessages::OnlineClients(keys, current_round)).await
                 }
 
 

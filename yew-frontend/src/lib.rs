@@ -83,11 +83,11 @@ impl Model {
     }
     fn show_events_in_table(&self) -> Html {
         html!(
-            <>
+            <ul>
             {for self.event_log.iter().map(|event| {
                 html!(<li> {event} </li>)
             })  }
-            </>
+            </ul>
         )
     }
 
@@ -284,7 +284,18 @@ impl Component for Model {
                 true
             }
             Msg::UpdateOnlineUsers(clients) => {
+                let mut clients = clients.clone();
+                
+                match self.client.as_ref() {
+                    Some(this_user) => {
+                        clients.remove(&this_user);
+                    }
+                    None => {
+                        // how?!
+                    }
+                }
                 self.peers = clients;
+
                 true
             }
         }
