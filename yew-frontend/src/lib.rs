@@ -40,7 +40,7 @@ impl Model {
             self.websocket = None;
             self.peers = HashSet::new();
             self.states = HashSet::new();
-            
+
     }
 }
 
@@ -54,16 +54,30 @@ enum Msg {
     AddState(State),
     RemoveState(State),
     CloseWebsocketConnection,
+    RequestUsersOnline,
     SendWsMessage(ControlMessages),
 }
 
 extern crate web_sys;
 
 impl Model {
-    fn send_ws_message(&mut self, data: &[u8]) {
+    fn send_ws_message(&mut self, data: ControlMessages) {
         let ws = self.websocket.take().unwrap();
 
-        ws.send_with_u8_array(data);
+        let message = data.clone();
+
+        let data = &data.serialize();
+
+        
+
+        match ws.send_with_u8_array(data) {
+            Ok(success) => {
+                self.link.send_message(Msg::LogEvent(format!("Successfully sent the ws message: {:?}", message)))
+            },
+            Err(err) => {
+                self.link.send_message(Msg::LogEvent(format!("There was an error sending the ws message: {:?}", err)))
+            }
+        }
 
         self.websocket = Some(ws);
     }
@@ -105,18 +119,22 @@ impl Model {
                             cloned.send_message(Msg::UpdateUsername(client))
                         }
 
-                        ControlMessages::Message(message, directionality) => {
+                        ControlMessages::Message(message, _directionality) => {
                             cloned.send_message(Msg::ServerSentWsMessage(message));
                         }
 
-                        ControlMessages::ServerInitiated(info) => cloned.send_message(
-                            Msg::LogEvent(format!("{:?} Connected To Websocket Server!", info)),
+                        ControlMessages::ServerInitiated(info) => cloned.send_message_batch(vec!(Msg::LogEvent(format!("{:?} Connected To Websocket Server!", info)),
+                        Msg::UpdateUsername(info),
+                        Msg::AddState(State::ConnectedToWebsocketServer),
+                        Msg::RequestUsersOnline
+                    )
+                            
                         ),
 
                         ControlMessages::OnlineClients(clients, round_number) => {
                             cloned.send_message(Msg::UpdateOnlineUsers(clients))
                         }
-                        ControlMessages::ReadyForPartner(direction) => {}
+                        ControlMessages::ReadyForPartner(_client) => {}
                         ControlMessages::ClosedConnection(_) => {
                             cloned.send_message(Msg::ResetPage)
                         }
@@ -157,7 +175,15 @@ impl Component for Model {
             Msg::ResetPage => {
                 self.reset_state();
                 true
-            }
+            },
+            Msg::RequestUsersOnline=> {
+                match self.client.as_ref() {
+                    Some(client) => { self.send_ws_message(ControlMessages::ReadyForPartner(client.clone()))},
+                    None => { self.link.send_message(Msg::LogEvent(format!("Client object is set to None, cannot request client id")))},
+                };
+                
+                true
+            },
             Msg::SendWsMessage(control_message) => {
                 self.link.send_message(Msg::LogEvent(format!(
                     "Sending Message to server: {:?}",
@@ -178,18 +204,18 @@ impl Component for Model {
                     ControlMessages::Message(_, message_direction) => match message_direction
                     {
                         MessageDirection::ClientToClient(_, _) => {
-                            self.send_ws_message(&control_message.serialize());
+                            self.send_ws_message(control_message);
                         }
                         MessageDirection::ServerToClient(_) => {}
                         MessageDirection::ClientToServer(_t) => {
-                            self.send_ws_message(&control_message.serialize());
+                            self.send_ws_message(control_message);
                         }
                     },
                     ControlMessages::OnlineClients(_, _) => self.link.send_message(Msg::LogEvent(
                         format!("OnlineClients isn't implemented on the client side."),
                     )),
                     ControlMessages::ReadyForPartner(client) => {
-                        self.send_ws_message(&ControlMessages::ReadyForPartner(client).serialize())
+                        self.send_ws_message(ControlMessages::ReadyForPartner(client))
                     }
                     ControlMessages::ClosedConnection(_) => {}
                 }
@@ -241,7 +267,8 @@ impl Component for Model {
                     self.websocket = Some(ws);
                     let messages: Vec<Msg> = vec![
                         Msg::LogEvent("attempting ws connection ...".to_string()),
-                        Msg::AddState(State::ConnectedToWebsocketServer),
+                        
+                        
                     ];
                     self.link.send_message_batch(messages);
                     true
@@ -301,7 +328,7 @@ impl Component for Model {
                             {self.show_peers_online()}
                             </div>
                                 )
-                            }  else {html!(<h1> {"No peers online this round."} </h1>)} }
+                            }  else {html!(<p> {"No peers online this round."} </p>)} }
 
                             <button onclick=self.link.callback(|_| {
                                 Msg::CloseWebsocketConnection

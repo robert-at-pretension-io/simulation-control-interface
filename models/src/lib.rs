@@ -42,7 +42,7 @@ pub enum ControlMessages {
     Message(String, MessageDirection),
     /// This will show the client the available users on any particular round
     OnlineClients(HashSet<Client>, RoundNumber),
-    /// This indicates that this client is ready to be paired at whatever future round
+    /// This indicates that this client is ready to be paired at whatever future round, the server will respond with a Self::OnlineClients variant
     ReadyForPartner(Client),
     /// This is used for ending the websocket connection between the client and the server. The message direction indicates who has initiated the closure.
     ClosedConnection(Client),

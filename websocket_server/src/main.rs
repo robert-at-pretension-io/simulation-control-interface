@@ -11,7 +11,9 @@ use futures_util::SinkExt;
 
 use tokio_tungstenite::WebSocketStream;
 
-use std::collections::HashMap;
+use std::collections::{HashSet,HashMap};
+
+use tungstenite::Message;
 
 use log::info;
 use tracing::{instrument, Level};
@@ -51,12 +53,15 @@ async fn send_message(stream: &mut WebSocketStream<TcpStream>, message: tungsten
 
 #[instrument]
 async fn establish_and_maintain_each_client_ws_connection(
-    mut tx_server_state_manager: mpsc::Sender<(ControlMessages, Option<mpsc::Sender<ControlMessages>>)>,
+    mut tx_server_state_manager: mpsc::Sender<(
+        ControlMessages,
+        Option<mpsc::Sender<ControlMessages>>,
+    )>,
 
     stream: TcpStream,
 ) {
-
-    let (goes_to_specific_ws_client_tx, mut goes_to_specific_ws_client_rx) =  mpsc::channel::<ControlMessages>(10);
+    let (goes_to_specific_ws_client_tx, mut goes_to_specific_ws_client_rx) =
+        mpsc::channel::<ControlMessages>(10);
 
     let this_client = Client {
         username: None,
@@ -64,7 +69,6 @@ async fn establish_and_maintain_each_client_ws_connection(
         user_id: uuid::Uuid::new_v4().to_string(),
         current_socket_addr: Some(stream.peer_addr().unwrap()),
     };
-
 
     tx_server_state_manager
         .send((ControlMessages::ServerInitiated(this_client.clone()), Some(goes_to_specific_ws_client_tx)))
@@ -75,10 +79,13 @@ async fn establish_and_maintain_each_client_ws_connection(
         .await
         .expect("failed to accept websocket.");
 
-    send_message(&mut ws_stream, tungstenite::Message::binary(
-        ControlMessages::ServerInitiated(this_client.clone()).serialize()
-    )).await;
-
+    send_message(
+        &mut ws_stream,
+        tungstenite::Message::binary(
+            ControlMessages::ServerInitiated(this_client.clone()).serialize(),
+        ),
+    )
+    .await;
 
     loop {
         tokio::select! {
@@ -89,21 +96,49 @@ async fn establish_and_maintain_each_client_ws_connection(
 
             }
             },
+            // This is the interface for incoming messages from the client to the server... Errors can be dealt with here before sending the message off to the server global state manager
             val = ws_stream.try_next() => {
                 let val = val.unwrap();
-                if val.is_some() { info!("{:?}", val); }
 
-                if val.unwrap().is_close() {
-            info!("The client is trying to close the connection");
-
-
-
+                if let Some(value) = val {
+                    match value {
+                        Message::Text(text) => {info!("received text: {:?}", text);},
+                        Message::Binary(bin) => {
+                            match ControlMessages::deserialize(&bin) {
+                                Ok(control_message) => {
+                                    tx_server_state_manager.send((control_message, None)).await.unwrap();
+                                    // match control_message  {
+                                    //     ControlMessages::ServerInitiated(Client) => {//
+                                    //     // nope
+                                    //     }
+                                    //     ControlMessages::ClientInfo(client) => { },
+                                    //     ControlMessages::Message(message, message_direction)=> { },
+                                    //     ControlMessages::OnlineClients(client_set, round_number)=> { },
+                                    //     ControlMessages::ReadyForPartner(client)=> { info!("Received the following: {:?}", client) },
+                                    //     ControlMessages::ClosedConnection(client)=> { },
+                                    // }
+                                },
+                                Err(oh_boy) => {info!("Error receiving message from ws client: {:?}", oh_boy)}
+                            }
+                        },
+                        Message::Close(reason) => {
+            info!("The client is trying to close the connection for the following reason: {:?}", reason);
             tx_server_state_manager
                 .send((ControlMessages::ClosedConnection(this_client.clone()),None))
                 .await
                 .expect("The connection was closed :[");
-            break; // I think this break makes it so that the function returns :o?
-        }
+                break // gets out of the loop... should deallocate everything?
+
+
+                        }
+                        Message::Ping(_) | Message::Pong(_)  => {
+                            info!("ping, pong or close message received")
+                        }
+                    }
+
+                }
+
+
 
             },
         };
@@ -112,11 +147,11 @@ async fn establish_and_maintain_each_client_ws_connection(
 
 #[instrument]
 async fn game_loop(
-    mut status_processer_notifier: tokio::sync::mpsc::Sender<i32>,
+    mut status_processer_notifier: tokio::sync::mpsc::Sender<u64>,
     round_interval: u64,
 ) {
     let mut interval = time::interval(time::Duration::from_secs(round_interval));
-    let mut round_number: i32 = 1;
+    let mut round_number: u64 = 1;
 
     loop {
         interval.tick().await;
@@ -129,18 +164,26 @@ async fn game_loop(
 }
 
 #[instrument]
-async fn server_global_state_manager(mut global_state_update_transceiver: Receiver<(ControlMessages, Option<mpsc::Sender<ControlMessages>>)> )  {
+async fn server_global_state_manager(
+    mut global_state_update_transceiver: Receiver<(
+        ControlMessages,
+        Option<mpsc::Sender<ControlMessages>>,
+    )>,
+) {
     let mut online_connections = HashMap::<Client, mpsc::Sender<ControlMessages>>::new();
 
-    let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<i32>(10);
+    let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<u64>(10);
 
     tokio::spawn(async move { game_loop(status_processer_notifier_tx, 60).await });
+
+    let mut current_round = 0;
 
     loop {
         tokio::select! {
 
             game_notifier = status_processer_notifier_rx.next() => {
                 if game_notifier.is_some() {
+                    current_round = game_notifier.unwrap();
                     println!("The new round is starting!! {} ", game_notifier.unwrap());
                 }
 
@@ -174,14 +217,19 @@ async fn server_global_state_manager(mut global_state_update_transceiver: Receiv
                 }
                 ControlMessages::ReadyForPartner(client) => {
                     info!("{:?} would like to get partner please", client.user_id);
+                    
+                    let keys : HashSet<Client> = online_connections.keys().cloned().collect();
+
+                    let temp_client_connection = online_connections.get_mut(&client).unwrap();
+                    temp_client_connection.send(ControlMessages::OnlineClients(keys, current_round)).await.unwrap();
                 }
                 ControlMessages::ClosedConnection(client) => {
 
                     online_connections.remove_entry(&client);
 
                 }
-                
-                
+
+
             }
             }
 
@@ -216,16 +264,12 @@ async fn main() {
     while let Some(Ok(stream)) = listener.next().await {
         let global_state_updater_tx_clone = global_state_updater_tx.clone();
 
-
         // this is a point in the program where the channel should be split up:
         // Both the tx and rx should will be sent to ws_connection. The tx part will then be sent to the status updater as a message
 
         tokio::spawn(async {
-            establish_and_maintain_each_client_ws_connection(
-                global_state_updater_tx_clone,
-                stream,
-            )
-            .await
+            establish_and_maintain_each_client_ws_connection(global_state_updater_tx_clone, stream)
+                .await
         });
     }
 }
