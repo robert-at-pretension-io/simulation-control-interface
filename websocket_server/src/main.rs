@@ -107,16 +107,6 @@ async fn establish_and_maintain_each_client_ws_connection(
                             match ControlMessages::deserialize(&bin) {
                                 Ok(control_message) => {
                                     tx_server_state_manager.send((control_message, None)).await.unwrap();
-                                    // match control_message  {
-                                    //     ControlMessages::ServerInitiated(Client) => {//
-                                    //     // nope
-                                    //     }
-                                    //     ControlMessages::ClientInfo(client) => { },
-                                    //     ControlMessages::Message(message, message_direction)=> { },
-                                    //     ControlMessages::OnlineClients(client_set, round_number)=> { },
-                                    //     ControlMessages::ReadyForPartner(client)=> { info!("Received the following: {:?}", client) },
-                                    //     ControlMessages::ClosedConnection(client)=> { },
-                                    // }
                                 },
                                 Err(oh_boy) => {info!("Error receiving message from ws client: {:?}", oh_boy)}
                             }
@@ -275,7 +265,6 @@ async fn main() {
     let (global_state_updater_tx, global_state_updater_rx) =
         mpsc::channel::<(ControlMessages, Option<mpsc::Sender<ControlMessages>>)>(10);
 
-    // Connection status manager, user/connection states are updated here but no "functionality" is really performed.
     tokio::spawn(async {
         info!("setting up a status manager");
         server_global_state_manager(global_state_updater_rx).await
@@ -284,9 +273,6 @@ async fn main() {
     // websocket manager
     while let Some(Ok(stream)) = listener.next().await {
         let global_state_updater_tx_clone = global_state_updater_tx.clone();
-
-        // this is a point in the program where the channel should be split up:
-        // Both the tx and rx should will be sent to ws_connection. The tx part will then be sent to the status updater as a message
 
         tokio::spawn(async {
             establish_and_maintain_each_client_ws_connection(global_state_updater_tx_clone, stream)

@@ -45,6 +45,8 @@ impl Model {
 }
 
 enum Msg {
+    SdpRequest(String, MessageDirection),
+    SdpResponse(String, MessageDirection),
     ResetPage,
     InitiateWebsocketConnectionProcess,
     UpdateUsername(Client),
@@ -118,6 +120,13 @@ impl Model {
                         ControlMessages::ClientInfo(client) => {
                             cloned.send_message(Msg::UpdateUsername(client))
                         }
+                        ControlMessages::SdpResponse(response, message_direction) => {
+                            cloned.send_message(Msg::SdpResponse(response, message_direction));
+                        }
+                        ControlMessages::SdpRequest(request, message_direction) => {
+                            cloned.send_message(Msg::SdpRequest(request, message_direction));
+                        
+                        }
 
                         ControlMessages::Message(message, _directionality) => {
                             cloned.send_message(Msg::ServerSentWsMessage(message));
@@ -172,6 +181,22 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::SdpRequest(sdp, message_direction) => {
+                match message_direction {
+                    MessageDirection::ClientToClient(flow) => {
+                        if &flow.sender == self.client.as_ref().unwrap() {
+                            self.link.send_message(Msg::SendWsMessage(ControlMessages::SdpRequest(sdp, message_direction)))
+                        }
+                        if &flow.receiver == self.client.as_ref().unwrap() {
+                            
+                        }
+                    } 
+                    MessageDirection::ClientToServer(_) | MessageDirection::ServerToClient(_) => {
+                        self.link.send_message(Msg::LogEvent(format!("SdpRequest is messing up...")));
+                    }
+                }
+                true
+            }
             Msg::ResetPage => {
                 self.reset_state();
                 true

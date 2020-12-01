@@ -23,11 +23,17 @@ impl PartialEq for Client {
 }
 
 #[derive(Debug, Serialize,Deserialize, Clone, Eq, PartialEq)]
+pub struct InformationFlow {
+    pub sender: Client,
+    pub receiver: Client
+}
+
+#[derive(Debug, Serialize,Deserialize, Clone, Eq, PartialEq)]
 pub enum MessageDirection {
     ClientToServer(Client),
     ServerToClient(Client),
     /// The first client will be the sender and the second will be the receiver 
-    ClientToClient(Client,Client)
+    ClientToClient(InformationFlow)
 }
 
 type RoundNumber = u64;
@@ -46,6 +52,10 @@ pub enum ControlMessages {
     ReadyForPartner(Client),
     /// This is used for ending the websocket connection between the client and the server. The message direction indicates who has initiated the closure.
     ClosedConnection(Client),
+    /// The string contains the content of the sdp message
+    SdpRequest(String, MessageDirection),
+    /// The receiver in the message direction is the client that initially sent the SDP Request 
+    SdpResponse(String, MessageDirection)
 }
 
 impl ControlMessages {
