@@ -45,6 +45,8 @@ impl Model {
 }
 
 enum Msg {
+    ReceivedIceCandidate(String, MessageDirection),
+    SendIceCandidate(String, MessageDirection),
     SdpRequest(String, MessageDirection),
     SdpResponse(String, MessageDirection),
     ResetPage,
@@ -188,7 +190,7 @@ impl Component for Model {
                             self.link.send_message(Msg::SendWsMessage(ControlMessages::SdpRequest(sdp, message_direction)))
                         }
                         if &flow.receiver == self.client.as_ref().unwrap() {
-                            
+
                         }
                     } 
                     MessageDirection::ClientToServer(_) | MessageDirection::ServerToClient(_) => {
