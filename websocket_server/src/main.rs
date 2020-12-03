@@ -198,6 +198,9 @@ async fn server_global_state_manager(
             info!("Received connection in status_manager");
 
             match control_message {
+                ControlMessages::SdpRequest(sdp, _) => {
+
+                }
                 ControlMessages::ServerInitiated(client) => {
 
                     let mut client_connection = client_controller_channel.unwrap();

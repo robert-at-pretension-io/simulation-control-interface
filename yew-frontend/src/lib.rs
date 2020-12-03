@@ -12,9 +12,22 @@ use wasm_bindgen::JsCast;
 use yew::prelude::*;
 
 // This local trait is for shared objects between the frontend and the backend
-use models::{Client, ControlMessages, MessageDirection};
+use models::{Client, ControlMessages, MessageDirection, InformationFlow};
 
 use std::collections::HashSet;
+
+
+
+// all of these are for webrtc
+use js_sys::Reflect;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen_futures::JsFuture;
+use web_sys::{
+     RtcDataChannelEvent, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
+    RtcSessionDescriptionInit,
+};
+
+
 #[derive(Hash, Eq, PartialEq, Debug)]
 enum State {
     ConnectedToWebsocketServer,
@@ -48,6 +61,8 @@ enum Msg {
     ReceivedIceCandidate(String, MessageDirection),
     SendIceCandidate(String, MessageDirection),
     SdpRequest(String, MessageDirection),
+    /// The string will indicate the client user_id field
+    MakeSdpRequestToClient(String),
     SdpResponse(String, MessageDirection),
     ResetPage,
     InitiateWebsocketConnectionProcess,
@@ -98,9 +113,19 @@ impl Model {
     fn show_peers_online(&self) -> Html {
         html!(
 
+
+                // <button onclick=self.link.callback(|_| {
+                //     Msg::InitiateWebsocketConnectionProcess
+                // })>
+                //     {"Click here to connect to the server."}
+                // </button>
+
             <ul>
             {for self.peers.iter().map(|client| {
-                html!(<li> {format!("{:?} : {:?}", client.username , client.current_socket_addr)} </li>)
+
+                html!(<li> <button onclick=self.link.callback(|_| {
+                    Msg::MakeSdpRequestToClient(client.user_id)
+                } ) > {format!("{:?} : {:?}", client.username , client.current_socket_addr)} </button> </li>)
             })  }
 
             </ul>
@@ -230,7 +255,7 @@ impl Component for Model {
                     )),
                     ControlMessages::Message(_, message_direction) => match message_direction
                     {
-                        MessageDirection::ClientToClient(_, _) => {
+                        MessageDirection::ClientToClient(flow) => {
                             self.send_ws_message(control_message);
                         }
                         MessageDirection::ServerToClient(_) => {}
@@ -245,6 +270,8 @@ impl Component for Model {
                         self.send_ws_message(ControlMessages::ReadyForPartner(client))
                     }
                     ControlMessages::ClosedConnection(_) => {}
+                    ControlMessages::SdpRequest(_, _) => {}
+                    ControlMessages::SdpResponse(_, _) => {}
                 }
 
                 true
@@ -325,6 +352,19 @@ impl Component for Model {
 
                 true
             }
+            Msg::ReceivedIceCandidate(_, _) => {false}
+            Msg::SendIceCandidate(_, _) => {false}
+            Msg::MakeSdpRequestToClient(user_id ) => {
+                let sender = self.client.clone().unwrap();
+                let receiver = Client{user_id, username: None, email: None, current_socket_addr: None};
+                let messages : Vec<Msg> = vec![Msg::LogEvent(format!("Need to make Sdp Request for {:?}", &receiver)),
+                Msg::SdpRequest(format!("sdpRequest"), MessageDirection::ClientToClient(InformationFlow{sender, receiver}))
+                ];
+
+                self.link.send_message_batch(messages);
+                true
+            }
+            Msg::SdpResponse(_, _) => {false}
         }
     }
 
