@@ -110,6 +110,7 @@ impl Model {
         )
     }
 
+    //still exhausted...
     fn show_peers_online(&self) -> Html {
         html!(
 
