@@ -66,7 +66,7 @@ async fn establish_and_maintain_each_client_ws_connection(
     let this_client = Client {
         username: None,
         email: None,
-        user_id: uuid::Uuid::new_v4().to_string(),
+        user_id: uuid::Uuid::new_v4(),
         current_socket_addr: Some(stream.peer_addr().unwrap()),
     };
 
@@ -216,8 +216,8 @@ async fn server_global_state_manager(
 
                     let mut client_connection = client_controller_channel.unwrap();
 
-
-                    client_connection.send(ControlMessages::ClientInfo(client.clone())).await.unwrap();
+                    let message_direction = MessageDirection::ServerToClient(client.clone());
+                    client_connection.send(ControlMessages::ClientInfo(message_direction)).await.unwrap();
                     
 
                     online_connections.insert(client, client_connection);
@@ -227,7 +227,14 @@ async fn server_global_state_manager(
                     send_messages_to_all_online_clients(&mut clients, ControlMessages::OnlineClients(keys, current_round)).await
                     
                 }
-                ControlMessages::ClientInfo(_client) => {
+                ControlMessages::ClientInfo(message_direction) => {
+                    match message_direction {
+                        MessageDirection::ClientToClient(_) | MessageDirection::ServerToClient(_) => {info!("Not sure how to implement this");}
+                        MessageDirection::ClientToServer(client) => {
+
+                            info!("received the following updated client info: {:?}", client);
+                        }
+                    }
                     // ? Needs to be more specific what this should do on the server... maybe this problem will be taken care of when the ControlMessages are segmented based on where the message should be interpretted
                 }
                 ControlMessages::Message(_message, _direction) => {

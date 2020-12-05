@@ -1,5 +1,6 @@
 #![recursion_limit = "512"]
 
+use uuid::Uuid;
 use wasm_bindgen::prelude::*;
 
 //Each of the javascript api features must be added in both the YAML file and used here
@@ -13,6 +14,9 @@ use yew::prelude::*;
 
 // This local trait is for shared objects between the frontend and the backend
 use models::{Client, ControlMessages, MessageDirection, InformationFlow};
+
+use std::net::SocketAddr;
+
 
 use std::collections::HashSet;
 
@@ -28,7 +32,7 @@ use web_sys::{
 };
 
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
 enum State {
     UnsetUsername,
     ConnectedToWebsocketServer,
@@ -39,7 +43,9 @@ static WEBSOCKET_URL: &str = "ws://127.0.0.1:80";
 
 struct Model {
     event_log: Vec<String>,
-    client: Option<Client>,
+connection_socket_address : Option<SocketAddr>,
+    user_id : Option<uuid::Uuid>,
+    username : Option<String>,
     partner: Option<Client>,
     link: ComponentLink<Self>,
     websocket: Option<WebSocket>,
@@ -49,7 +55,9 @@ struct Model {
 
 impl Model {
     fn reset_state(&mut self) {
-            self.client = None;
+            self.username = None;
+            self.user_id = None;
+            self.connection_socket_address = None;
             self.partner =  None;
             self.websocket = None;
             self.peers = HashSet::new();
@@ -57,18 +65,19 @@ impl Model {
 
     }
 }
-
+#[derive(Debug,Clone)]
 enum Msg {
+    UpdateUsername(String),
+    SetClient(Client),
     ClearLog,
     ReceivedIceCandidate(String, MessageDirection),
     SendIceCandidate(String, MessageDirection),
     SdpRequest(String, MessageDirection),
     /// The string will indicate the client user_id field
-    MakeSdpRequestToClient(String),
+    MakeSdpRequestToClient(Uuid),
     SdpResponse(String, MessageDirection),
     ResetPage,
     InitiateWebsocketConnectionProcess,
-    UpdateUsername(Client),
     LogEvent(String),
     ServerSentWsMessage(String),
     UpdateOnlineUsers(HashSet<Client>),
@@ -83,36 +92,42 @@ extern crate web_sys;
 
 impl Model {
 
+    fn client_to_model(&mut self, client : Client) {
+self.connection_socket_address = client.current_socket_addr;
+self.username = client.username;
+self.user_id = Some(client.user_id);
+    }
+
     fn show_welcome_message(&self) -> Html {
 
-        {if !self.states.contains(&State::UnsetUsername) {
-            html!(
-                <h1>
-            {format!("Welcome {}", self.client.clone().unwrap().username.unwrap())}
-                </h1>
-        )
+        {if self.username.is_none() {
+            
+                {if self.states.contains(&State::ConnectedToWebsocketServer) {
+
+                    html!(
+                    <>
+
+                    <button onclick=self.link.callback( |_| { Msg::UpdateUsername(format!("Alice"))
+
+                }   )> {"Set username Alice"} </button>
+
+                <button onclick=self.link.callback( |_| { Msg::UpdateUsername(format!("Bob"))
+
+                }   )> {"Set username Bob"} </button>
+                    </>
+                    
+                    )
+              
+
+            } else { html!(<></>)}
         }
-        else{
+        
+        }
+        else{ //Username IS set!
             html!(
                 <div>
-                {if(self.states.contains(&State::ConnectedToWebsocketServer)) {
-                        html!(<div>
-                        
-                            <button > {"Set username Alice"} </button>
-                            <button > {"Set username Bob"} </button>
-                        
-                        </div>
-                        )
-                  
-
-                }else {
-                    html!(
-                        <div> </div>
-
-                    )
-
-                }}
-                
+                //, self.client.clone().unwrap().username.unwrap()
+                {format!("Welcome {}", self.username.as_ref().unwrap())}
 
                 </div>
 
@@ -177,8 +192,19 @@ impl Model {
 
                 match ControlMessages::deserialize(&array.to_vec()) {
                     Ok(result) => match result {
-                        ControlMessages::ClientInfo(client) => {
-                            cloned.send_message(Msg::UpdateUsername(client))
+                        ControlMessages::ClientInfo(message_direction) => {
+
+                            match message_direction {
+                                MessageDirection::ClientToClient(_) | MessageDirection::ClientToServer(_) => {
+                                    // this shouldn't happen?
+                                    cloned.send_message(Msg::LogEvent(format!("This shouldn't happen :/")));
+                                }
+                                MessageDirection::ServerToClient(client) => {
+                                    cloned.send_message(Msg::SetClient(client));
+                                }
+                            }
+
+                            
                         }
                         ControlMessages::SdpResponse(response, message_direction) => {
                             cloned.send_message(Msg::SdpResponse(response, message_direction));
@@ -193,7 +219,7 @@ impl Model {
                         }
 
                         ControlMessages::ServerInitiated(info) => cloned.send_message_batch(vec!(Msg::LogEvent(format!("{:?} Connected To Websocket Server!", info)),
-                        Msg::UpdateUsername(info.clone()),
+                        Msg::SetClient(info.clone()),
                         Msg::AddState(State::ConnectedToWebsocketServer),
                         Msg::RequestUsersOnline(info)
                     )
@@ -232,7 +258,9 @@ impl Component for Model {
             link,
             websocket: None,
             event_log: Vec::<String>::new(),
-            client: None,
+            connection_socket_address : None,
+            user_id : None,
+            username : None,
             partner: None,
             peers: HashSet::<Client>::new(),
             states: HashSet::<State>::new(),
@@ -247,13 +275,14 @@ impl Component for Model {
             }
             Msg::SdpRequest(sdp, message_direction) => {
                 let message_direction_clone = message_direction.clone();
+                let client = Client{username: None, user_id: self.user_id.clone().unwrap(), email: None, current_socket_addr: None};
                 match message_direction {
                     MessageDirection::ClientToClient(flow) => {
                         
-                        if &flow.sender == self.client.as_ref().unwrap() {
+                        if &flow.sender == &client {
                             self.link.send_message(Msg::SendWsMessage(ControlMessages::SdpRequest(sdp, message_direction_clone)))
                         }
-                        if &flow.receiver == self.client.as_ref().unwrap() {
+                        if &flow.receiver == &client{
 
                         }
                     } 
@@ -286,9 +315,23 @@ impl Component for Model {
                             "ServerInitiated isn't implemented on the client side"
                         )))
                     }
-                    ControlMessages::ClientInfo(_) => self.link.send_message(Msg::LogEvent(
-                        format!("ClientInfo isn't implemented on the client side."),
-                    )),
+                    ControlMessages::ClientInfo(message_direction) => {
+                        
+                        match message_direction {
+                            MessageDirection::ServerToClient(client) => {
+                                self.link.send_message(Msg::UpdateUsername(client.username.unwrap()))
+                            }
+                            MessageDirection::ClientToServer(_) | MessageDirection::ClientToClient(_) => {
+                                self.link.send_message(Msg::LogEvent(
+                                    format!("ClientInfo isn't implemented on the client side."),
+                                ))
+                            }
+                        }
+                        
+                
+                }
+                    
+                    ,
                     ControlMessages::Message(_, message_direction) => match message_direction
                     {
                         MessageDirection::ClientToClient(flow) => {
@@ -369,23 +412,28 @@ impl Component for Model {
                     true
                 }
             },
-            Msg::UpdateUsername(client) => {
-                if client.username.is_none() {
-                    self.link.send_message(Msg::AddState(State::UnsetUsername));
-                }
-                else {
-                    self.link.send_message(Msg::RemoveState(State::UnsetUsername))
-                }
+            Msg::SetClient(client) => {
+                self.client_to_model(client);
 
-                self.client = Some(client);
+                true
+            }
+            Msg::UpdateUsername(username) => {
+                self.username = Some(username.clone());
+                let msg = Msg::SendWsMessage(ControlMessages::ClientInfo(
+                    MessageDirection::ClientToServer(Client{
+                        email: None, user_id : self.user_id.clone().unwrap(), username : Some(username), current_socket_addr : None
+                    })
+
+                ));
+                self.link.send_message(msg);
                 true
             }
             Msg::UpdateOnlineUsers(clients) => {
                 let mut clients = clients.clone();
                 
-                match self.client.as_ref() {
+                match self.user_id {
                     Some(this_user) => {
-                        clients.remove(&this_user);
+                        clients.remove(&Client::from_user_id(this_user));
                     }
                     None => {
                         // how?!
@@ -398,7 +446,7 @@ impl Component for Model {
             Msg::ReceivedIceCandidate(_, _) => {false}
             Msg::SendIceCandidate(_, _) => {false}
             Msg::MakeSdpRequestToClient(user_id ) => {
-                let sender = self.client.clone().unwrap();
+                let sender = Client::from_user_id(user_id);
                 let receiver = Client{user_id, username: None, email: None, current_socket_addr: None};
                 let messages : Vec<Msg> = vec![Msg::LogEvent(format!("Need to make Sdp Request for {:?}", &receiver)),
                 Msg::SdpRequest(format!("sdpRequest"), MessageDirection::ClientToClient(InformationFlow{sender, receiver}))
@@ -416,11 +464,14 @@ impl Component for Model {
     }
 
     fn view(&self) -> Html {
+        
         html! {
             <div>
 
 
-                {self.show_welcome_message()}
+                {
+                    
+                    self.show_welcome_message()}
                 
                 
                 {if (self.event_log.len() > 5 ){ html!(<button onclick=self.link.callback(|_| {Msg::ClearLog})> {"Clear the event log."} </button> )} else {html!(<></>)}  }

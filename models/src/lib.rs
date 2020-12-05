@@ -11,7 +11,7 @@ use std::net::SocketAddr;
 pub struct Client {
     pub username: Option<String>,
     pub email: Option<String>,
-    pub user_id: String,
+    pub user_id: uuid::Uuid,
     // This will only be set to None if the websocket connection is not yet initialized... Not sure this ever actually happens?
     pub current_socket_addr : Option<SocketAddr>
 }
@@ -19,6 +19,13 @@ pub struct Client {
 impl PartialEq for Client {
     fn eq(&self, other : &Self) -> bool {
         self.user_id == other.user_id
+    }
+}
+
+impl Client {
+    /// This function is mainly used for comparison...
+    pub fn from_user_id(user_id : uuid::Uuid) -> Client {
+        Client{username: None, user_id, email: None, current_socket_addr : None}
     }
 }
 
@@ -43,7 +50,7 @@ pub enum ControlMessages {
     /// When the server is initiated, the server sends this to the client and the client responds in turn (of course, changing the MessageDirection).
     ServerInitiated(Client),
     /// This is sent from the server to the client in order to uniquely identify the client... Will need to store this in a database
-    ClientInfo(Client),
+    ClientInfo(MessageDirection),
     /// The Message Direction contains the sender and intended receiver
     Message(String, MessageDirection),
     /// This will show the client the available users on any particular round
