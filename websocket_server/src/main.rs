@@ -15,7 +15,7 @@ use std::collections::{HashSet,HashMap};
 
 use tungstenite::Message;
 
-use log::info;
+use log::{info, warn};
 use tracing::{instrument, Level};
 
 use models::{Client, ControlMessages, MessageDirection};
@@ -196,9 +196,20 @@ async fn server_global_state_manager(
                 let (control_message, client_controller_channel) = some_connection.unwrap();
 
             info!("Received connection in status_manager");
-
+                let re_routed_message = control_message.clone();
             match control_message {
-                ControlMessages::SdpRequest(sdp, _) => {
+                ControlMessages::SdpRequest(sdp, message_direction) => {
+                    match message_direction {
+                        MessageDirection::ClientToClient(flow) => {
+                            let receiver = flow.receiver.clone();
+                            online_connections.get_mut(&receiver).unwrap().send(re_routed_message).await.unwrap();
+                        }
+                        MessageDirection::ClientToServer(_) | MessageDirection::ServerToClient(_) => {
+                            warn!("This type of message should only be between clients in order to setup sdprequest/response/ice-handling");
+                        }
+                    }
+                }
+                ControlMessages::SdpResponse(sdp,message_direction) => {
 
                 }
                 ControlMessages::ServerInitiated(client) => {

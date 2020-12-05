@@ -30,6 +30,7 @@ use web_sys::{
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 enum State {
+    UnsetUsername,
     ConnectedToWebsocketServer,
     ConnectedToRtcPeer,
 }
@@ -58,6 +59,7 @@ impl Model {
 }
 
 enum Msg {
+    ClearLog,
     ReceivedIceCandidate(String, MessageDirection),
     SendIceCandidate(String, MessageDirection),
     SdpRequest(String, MessageDirection),
@@ -73,13 +75,53 @@ enum Msg {
     AddState(State),
     RemoveState(State),
     CloseWebsocketConnection,
-    RequestUsersOnline,
+    RequestUsersOnline(Client),
     SendWsMessage(ControlMessages),
 }
 
 extern crate web_sys;
 
 impl Model {
+
+    fn show_welcome_message(&self) -> Html {
+
+        {if !self.states.contains(&State::UnsetUsername) {
+            html!(
+                <h1>
+            {format!("Welcome {}", self.client.clone().unwrap().username.unwrap())}
+                </h1>
+        )
+        }
+        else{
+            html!(
+                <div>
+                {if(self.states.contains(&State::ConnectedToWebsocketServer)) {
+                        html!(<div>
+                        
+                            <button > {"Set username Alice"} </button>
+                            <button > {"Set username Bob"} </button>
+                        
+                        </div>
+                        )
+                  
+
+                }else {
+                    html!(
+                        <div> </div>
+
+                    )
+
+                }}
+                
+
+                </div>
+
+            )
+        }
+        
+        }
+    }
+
     fn send_ws_message(&mut self, data: ControlMessages) {
         let ws = self.websocket.take().unwrap();
 
@@ -111,26 +153,16 @@ impl Model {
     }
 
     //still exhausted...
-    fn show_peers_online(&self) -> Html {
-        html!(
+    fn show_peers_online(&self, client: &Client) -> Html {
+        
+            let client_clone = client.clone();
+            let client_clone2 = client.clone();
 
-
-                // <button onclick=self.link.callback(|_| {
-                //     Msg::InitiateWebsocketConnectionProcess
-                // })>
-                //     {"Click here to connect to the server."}
-                // </button>
-
-            <ul>
-            {for self.peers.iter().map(|client| {
-
-                html!(<li> <button onclick=self.link.callback(|_| {
-                    Msg::MakeSdpRequestToClient(client.user_id)
-                } ) > {format!("{:?} : {:?}", client.username , client.current_socket_addr)} </button> </li>)
-            })  }
-
-            </ul>
-        )
+                html!(<li> <button onclick=self.link.callback( move |_| {
+                    Msg::MakeSdpRequestToClient(client_clone.user_id.clone())
+                } ) > {format!("{:?} : {:?}", client_clone2.username.clone() , client_clone2.current_socket_addr.clone())} </button> </li>)
+              
+        
     }
 
     fn setup_websocket_object_callbacks(&mut self, ws: WebSocket) -> WebSocket {
@@ -161,9 +193,9 @@ impl Model {
                         }
 
                         ControlMessages::ServerInitiated(info) => cloned.send_message_batch(vec!(Msg::LogEvent(format!("{:?} Connected To Websocket Server!", info)),
-                        Msg::UpdateUsername(info),
+                        Msg::UpdateUsername(info.clone()),
                         Msg::AddState(State::ConnectedToWebsocketServer),
-                        Msg::RequestUsersOnline
+                        Msg::RequestUsersOnline(info)
                     )
                             
                         ),
@@ -209,11 +241,17 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::ClearLog => {
+                self.event_log = Vec::<String>::new();
+                true
+            }
             Msg::SdpRequest(sdp, message_direction) => {
+                let message_direction_clone = message_direction.clone();
                 match message_direction {
                     MessageDirection::ClientToClient(flow) => {
+                        
                         if &flow.sender == self.client.as_ref().unwrap() {
-                            self.link.send_message(Msg::SendWsMessage(ControlMessages::SdpRequest(sdp, message_direction)))
+                            self.link.send_message(Msg::SendWsMessage(ControlMessages::SdpRequest(sdp, message_direction_clone)))
                         }
                         if &flow.receiver == self.client.as_ref().unwrap() {
 
@@ -229,11 +267,8 @@ impl Component for Model {
                 self.reset_state();
                 true
             },
-            Msg::RequestUsersOnline=> {
-                match self.client.as_ref() {
-                    Some(client) => { self.send_ws_message(ControlMessages::ReadyForPartner(client.clone()))},
-                    None => { self.link.send_message(Msg::LogEvent(format!("Client object is set to None, cannot request client id")))},
-                };
+            Msg::RequestUsersOnline(client)=> {
+                self.send_ws_message(ControlMessages::ReadyForPartner(client.clone()));
                 
                 true
             },
@@ -335,6 +370,13 @@ impl Component for Model {
                 }
             },
             Msg::UpdateUsername(client) => {
+                if client.username.is_none() {
+                    self.link.send_message(Msg::AddState(State::UnsetUsername));
+                }
+                else {
+                    self.link.send_message(Msg::RemoveState(State::UnsetUsername))
+                }
+
                 self.client = Some(client);
                 true
             }
@@ -376,11 +418,17 @@ impl Component for Model {
     fn view(&self) -> Html {
         html! {
             <div>
-                <h1>
-                {"Welcome!"}
-                </h1>
+
+
+                {self.show_welcome_message()}
+                
+                
+                {if (self.event_log.len() > 5 ){ html!(<button onclick=self.link.callback(|_| {Msg::ClearLog})> {"Clear the event log."} </button> )} else {html!(<></>)}  }
                 <div>
-                <p> {format!("The following details the event log of the application:")} </p>
+
+                {if (self.event_log.len() > 1 ){ html!(<p> {format!("The following details the event log of the application:")} </p> )} else {html!(<></>)}  }
+
+                
                 {self.show_events_in_table() }
                 </div>
 
@@ -404,7 +452,12 @@ impl Component for Model {
                                 html!(
                             <div>
                             <h1> {"Peers online:"} </h1>
-                            {self.show_peers_online()}
+                            {
+                                for self.peers.iter().map(|client| {
+                                self.show_peers_online(client)
+                                })
+                            
+                            }
                             </div>
                                 )
                             }  else {html!(<p> {"No peers online this round."} </p>)} }
