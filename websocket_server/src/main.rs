@@ -222,7 +222,6 @@ async fn server_global_state_manager(
 
                     online_connections.insert(client_id, (client, client_connection));
 
-                    let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
                     let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<ControlMessages>>) = online_connections.values().cloned().unzip();
 
 
@@ -237,12 +236,17 @@ async fn server_global_state_manager(
                             info!("received the following updated client info: {:?}", client);
                             match online_connections.get_mut(&client.user_id) {
                                 Some((old_client, client_connection)) => {
-                                    old_client = &mut client;
+                                    old_client.replace_with_newer_values(client).unwrap()
                                 },
                                 None => {
                                     // nooo
                                 }
                             }
+
+                            let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<ControlMessages>>) = online_connections.values().cloned().unzip();
+
+
+                    send_messages_to_all_online_clients(&mut client_connections, ControlMessages::OnlineClients(clients, current_round)).await
                         }
                     }
                     // ? Needs to be more specific what this should do on the server... maybe this problem will be taken care of when the ControlMessages are segmented based on where the message should be interpretted

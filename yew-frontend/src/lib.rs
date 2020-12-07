@@ -34,7 +34,6 @@ use web_sys::{
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 enum State {
-    UnsetUsername,
     ConnectedToWebsocketServer,
     ConnectedToRtcPeer,
 }
@@ -167,7 +166,7 @@ self.user_id = Some(client.user_id);
         )
     }
 
-    //still exhausted...
+    
     fn show_peers_online(&self, client: &Client) -> Html {
         
             let client_clone = client.clone();
@@ -457,7 +456,13 @@ impl Component for Model {
             Msg::ReceivedIceCandidate(_, _) => {false}
             Msg::SendIceCandidate(_, _) => {false}
             Msg::MakeSdpRequestToClient(user_id ) => {
-                let sender = Client::from_user_id(user_id);
+                let sender_lookup = Client::from_user_id(user_id);
+
+                let sender = self.peers.get(&sender_lookup).clone();
+
+                self.link.send_message(Msg::LogEvent(format!("found the following: {:?}", sender)));
+
+                let sender = sender.unwrap().to_owned();
                 let receiver = Client{user_id, username: None, email: None, current_socket_addr: None};
                 let messages : Vec<Msg> = vec![Msg::LogEvent(format!("Need to make Sdp Request for {:?}", &receiver)),
                 Msg::SdpRequest(format!("sdpRequest"), MessageDirection::ClientToClient(InformationFlow{sender, receiver}))
@@ -494,11 +499,6 @@ impl Component for Model {
                 {self.show_events_in_table() }
                 </div>
 
-                // <button onclick=self.link.callback(|_| {
-                //     Msg::InitiateWebsocketConnectionProcess
-                // })>
-                //     {"Click here to connect to the server."}
-                // </button>
 
                 {
                     if (!self.states.contains(&State::ConnectedToWebsocketServer)){
@@ -510,14 +510,16 @@ impl Component for Model {
                     else {
                         html!(<div>
 
-                            {if !self.peers.is_empty() {
+                            {if self.peers.len() > 1 {
                                 html!(
                             <div>
                             <h1> {"Peers online:"} </h1>
                             {
                                 for self.peers.iter().map(|client| {
-                                self.show_peers_online(client)
-                                })
+                                    if client != &Client::from_user_id(self.user_id.unwrap()){
+                                self.show_peers_online(client)} else {html!(<></>)}
+                                
+                            })
                             
                             }
                             </div>

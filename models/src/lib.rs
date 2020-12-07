@@ -27,6 +27,18 @@ impl Client {
     pub fn from_user_id(user_id : uuid::Uuid) -> Client {
         Client{username: None, user_id, email: None, current_socket_addr : None}
     }
+
+    pub fn replace_with_newer_values(&mut self, new : Client) -> Result<(), String>{
+        if self.user_id == new.user_id {
+            self.username = new.username;
+            self.email = new.email;
+            self.current_socket_addr = new.current_socket_addr;
+            Ok(())
+        }
+        else {
+            Err(format!("The new client did not equal the old one!"))
+        }
+    }
 }
 
 #[derive(Debug, Serialize,Deserialize, Clone, Eq, PartialEq)]
