@@ -319,12 +319,23 @@ impl Component for Model {
                         
                         match message_direction {
                             MessageDirection::ServerToClient(client) => {
-                                self.link.send_message(Msg::UpdateUsername(client.username.unwrap()))
-                            }
-                            MessageDirection::ClientToServer(_) | MessageDirection::ClientToClient(_) => {
                                 self.link.send_message(Msg::LogEvent(
                                     format!("ClientInfo isn't implemented on the client side."),
                                 ))
+                                
+                            }
+                            MessageDirection::ClientToClient(_) => {
+                                self.link.send_message(Msg::LogEvent(
+                                    format!("ClientInfo isn't implemented on the client side."),
+                                ))
+                            }
+                            MessageDirection::ClientToServer(_)   => {
+                                self.link.send_message(Msg::LogEvent(
+                                    format!("Trying to change username..."),
+                                ));
+                                // self.link.send_message(Msg::UpdateUsername(client.username.unwrap()))
+                                self.send_ws_message(control_message)
+                                
                             }
                         }
                         

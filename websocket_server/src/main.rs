@@ -173,7 +173,7 @@ async fn server_global_state_manager(
         Option<mpsc::Sender<ControlMessages>>,
     )>,
 ) {
-    let mut online_connections = HashMap::<Client, mpsc::Sender<ControlMessages>>::new();
+    let mut online_connections = HashMap::<uuid::Uuid,(Client, mpsc::Sender<ControlMessages>)>::new();
 
     let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<u64>(10);
 
@@ -202,7 +202,7 @@ async fn server_global_state_manager(
                     match message_direction {
                         MessageDirection::ClientToClient(flow) => {
                             let receiver = flow.receiver.clone();
-                            online_connections.get_mut(&receiver).unwrap().send(re_routed_message).await.unwrap();
+                            online_connections.get_mut(&receiver.user_id).unwrap().1.send(re_routed_message).await.unwrap();
                         }
                         MessageDirection::ClientToServer(_) | MessageDirection::ServerToClient(_) => {
                             warn!("This type of message should only be between clients in order to setup sdprequest/response/ice-handling");
@@ -218,13 +218,15 @@ async fn server_global_state_manager(
 
                     let message_direction = MessageDirection::ServerToClient(client.clone());
                     client_connection.send(ControlMessages::ClientInfo(message_direction)).await.unwrap();
-                    
+                    let client_id = client.user_id;
 
-                    online_connections.insert(client, client_connection);
+                    online_connections.insert(client_id, (client, client_connection));
 
-                    let keys : HashSet<Client> = online_connections.keys().cloned().collect();
-                    let mut clients : Vec<mpsc::Sender<ControlMessages>> = online_connections.values().cloned().collect();
-                    send_messages_to_all_online_clients(&mut clients, ControlMessages::OnlineClients(keys, current_round)).await
+                    let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
+                    let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<ControlMessages>>) = online_connections.values().cloned().unzip();
+
+
+                    send_messages_to_all_online_clients(&mut client_connections, ControlMessages::OnlineClients(clients, current_round)).await
                     
                 }
                 ControlMessages::ClientInfo(message_direction) => {
@@ -233,6 +235,14 @@ async fn server_global_state_manager(
                         MessageDirection::ClientToServer(client) => {
 
                             info!("received the following updated client info: {:?}", client);
+                            match online_connections.get_mut(&client.user_id) {
+                                Some((old_client, client_connection)) => {
+                                    old_client = &mut client;
+                                },
+                                None => {
+                                    // nooo
+                                }
+                            }
                         }
                     }
                     // ? Needs to be more specific what this should do on the server... maybe this problem will be taken care of when the ControlMessages are segmented based on where the message should be interpretted
@@ -245,20 +255,21 @@ async fn server_global_state_manager(
                 }
                 ControlMessages::ReadyForPartner(client) => {
                     info!("{:?} would like to get partner please", client.user_id);
-                    
-                    let keys : HashSet<Client> = online_connections.keys().cloned().collect();
+                    let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
+                    let (mut clients, _) : (HashSet<Client>, Vec<mpsc::Sender<ControlMessages>>) = online_connections.values().cloned().unzip();
 
-                    let temp_client_connection = online_connections.get_mut(&client).unwrap();
-                    temp_client_connection.send(ControlMessages::OnlineClients(keys, current_round)).await.unwrap();
+
+                    let (_, temp_client_connection) = online_connections.get_mut(&client.user_id).unwrap();
+                    temp_client_connection.send(ControlMessages::OnlineClients(clients, current_round)).await.unwrap();
                 }
                 ControlMessages::ClosedConnection(client) => {
 
-                    online_connections.remove_entry(&client);
+                    online_connections.remove_entry(&client.user_id);
 
-                    
-                    let keys : HashSet<Client> = online_connections.keys().cloned().collect();
-                    let mut clients : Vec<mpsc::Sender<ControlMessages>> = online_connections.values().cloned().collect();
-                    send_messages_to_all_online_clients(&mut clients, ControlMessages::OnlineClients(keys, current_round)).await
+                    let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
+                    let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<ControlMessages>>) = online_connections.values().cloned().unzip();
+
+                    send_messages_to_all_online_clients(&mut client_connections, ControlMessages::OnlineClients(clients, current_round)).await
                 }
 
 
