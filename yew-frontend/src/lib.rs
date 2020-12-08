@@ -91,6 +91,14 @@ extern crate web_sys;
 
 impl Model {
 
+    fn full_client_info_from_user_id(&self, user_id : uuid::Uuid) -> Result<Client, String> {
+        let client = self.peers.get(&Client::from_user_id(user_id)).clone().to_owned();
+        match client {
+            Some(client) => {Ok(client.to_owned())},
+            None => {Err(format!("The client wasn't found in the online peer set."))}
+        }
+    }
+
     fn client_to_model(&mut self, client : Client) {
 self.connection_socket_address = client.current_socket_addr;
 self.username = client.username;
@@ -456,13 +464,16 @@ impl Component for Model {
             Msg::ReceivedIceCandidate(_, _) => {false}
             Msg::SendIceCandidate(_, _) => {false}
             Msg::MakeSdpRequestToClient(user_id ) => {
-                let sender_lookup = Client::from_user_id(user_id);
+                // let sender_lookup = Client::from_user_id(user_id);
 
-                let sender = self.peers.get(&sender_lookup).clone();
+                let sender : Client ;
+                match Model::full_client_info_from_user_id(user_id) {
+                    Ok(client) => 
+                }
 
                 self.link.send_message(Msg::LogEvent(format!("found the following: {:?}", sender)));
 
-                let sender = sender.unwrap().to_owned();
+                
                 let receiver = Client{user_id, username: None, email: None, current_socket_addr: None};
                 let messages : Vec<Msg> = vec![Msg::LogEvent(format!("Need to make Sdp Request for {:?}", &receiver)),
                 Msg::SdpRequest(format!("sdpRequest"), MessageDirection::ClientToClient(InformationFlow{sender, receiver}))
