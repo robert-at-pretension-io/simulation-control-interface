@@ -92,6 +92,7 @@ async fn establish_and_maintain_each_client_ws_connection(
 
             control_message = goes_to_specific_ws_client_rx.next() => {
             if control_message.is_some() {
+
                 ws_stream.send(tungstenite::Message::Binary(control_message.unwrap().serialize())).await.unwrap();
 
             }
@@ -196,16 +197,21 @@ async fn server_global_state_manager(
                 let (control_message, client_controller_channel) = some_connection.unwrap();
 
             info!("Received connection in status_manager");
-                let re_routed_message = control_message.clone();
+            let first_clone = control_message.clone();
+            
+            
+                
             match control_message {
                 ControlMessages::SdpRequest(sdp, message_direction) => {
+                    info!("Received SdpRequest message with sdp: {:?}",sdp);
                     match message_direction {
                         MessageDirection::ClientToClient(flow) => {
+                            info!("resending the following information: {:?}",first_clone );
                             let receiver = flow.receiver.clone();
-                            online_connections.get_mut(&receiver.user_id).unwrap().1.send(re_routed_message).await.unwrap();
+                            online_connections.get_mut(&receiver).unwrap().1.send(first_clone.switch_direction()).await.unwrap();
                         }
                         MessageDirection::ClientToServer(_) | MessageDirection::ServerToClient(_) => {
-                            warn!("This type of message should only be between clients in order to setup sdprequest/response/ice-handling");
+                            info!("This type of message should only be between clients in order to setup sdprequest/response/ice-handling");
                         }
                     }
                 }
