@@ -13,7 +13,7 @@ use wasm_bindgen::JsCast;
 use yew::prelude::*;
 
 // This local trait is for shared objects between the frontend and the backend
-use models::{Client, ControlMessages, MessageDirection, InformationFlow, Entity};
+use models::{Client, Command, MessageDirection, InformationFlow, Entity, DetailedEntity, Envelope, ClientCommand, ServerCommand, ServerAndClientCommand};
 
 use std::net::SocketAddr;
 
@@ -84,7 +84,7 @@ enum Msg {
     RemoveState(State),
     CloseWebsocketConnection,
     RequestUsersOnline(Client),
-    SendWsMessage(ControlMessages),
+    SendWsMessage(Envelope),
 }
 
 extern crate web_sys;
@@ -198,10 +198,10 @@ self.user_id = Some(client.user_id);
                 let array = js_sys::Uint8Array::new(&abuf);
 
                 match ControlMessages::deserialize(&array.to_vec()) {
-                    Ok(result) => match result {
+                    Ok(result) => match result.commmand {
                         // only need to take care of the messages that are intended to be handled on the client
 
-                        ControlMessages::ServerCommand(_) => cloned.send_message(Msg::LogEvent(format!("Should not need to implement these on the client"))),
+                        Command::ServerCommand(_) => cloned.send_message(Msg::LogEvent(format!("Should not need to implement these on the client"))),
                         ControlMessages::ClientCommand(client_command) => {
                             match client_command {
                                 models::ClientCommand::ServerInitiated(client) => {

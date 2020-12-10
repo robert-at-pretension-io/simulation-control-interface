@@ -140,6 +140,8 @@ pub struct Envelope{
 }
 
 impl Envelope {
+    
+
     pub fn serialize(&self) -> Vec<u8>{
         match bincode::serialize(self) {
             Ok(vec) => {vec},

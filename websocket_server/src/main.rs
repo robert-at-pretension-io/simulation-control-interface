@@ -11,14 +11,17 @@ use futures_util::SinkExt;
 
 use tokio_tungstenite::WebSocketStream;
 
-use std::collections::{HashSet,HashMap};
+use std::collections::{HashMap, HashSet};
 
 use tungstenite::Message;
 
 use log::{info, warn};
 use tracing::{instrument, Level};
 
-use models::{Client, ControlMessages, MessageDirection};
+use models::{
+    Client, ClientCommand, Command, DetailedEntity, Entity, Envelope, InformationFlow,
+    MessageDirection, ServerAndClientCommand, ServerCommand,
+};
 
 #[instrument()]
 async fn send_message(stream: &mut WebSocketStream<TcpStream>, message: tungstenite::Message) {
@@ -53,15 +56,12 @@ async fn send_message(stream: &mut WebSocketStream<TcpStream>, message: tungsten
 
 #[instrument]
 async fn establish_and_maintain_each_client_ws_connection(
-    mut tx_server_state_manager: mpsc::Sender<(
-        ControlMessages,
-        Option<mpsc::Sender<ControlMessages>>,
-    )>,
+    mut tx_server_state_manager: mpsc::Sender<(Envelope, Option<mpsc::Sender<Envelope>>)>,
 
     stream: TcpStream,
 ) {
     let (goes_to_specific_ws_client_tx, mut goes_to_specific_ws_client_rx) =
-        mpsc::channel::<ControlMessages>(10);
+        mpsc::channel::<Envelope>(10);
 
     let this_client = Client {
         username: None,
@@ -71,7 +71,7 @@ async fn establish_and_maintain_each_client_ws_connection(
     };
 
     tx_server_state_manager
-        .send((ControlMessages::ServerInitiated(this_client.clone()), Some(goes_to_specific_ws_client_tx)))
+        .send((Envelope{command: Command::ClientCommand(ClientCommand::ServerInitiated(this_client.clone())),sender: Entity::Client, receiver: Entity::Server}, Some(goes_to_specific_ws_client_tx)))
         .await
         .expect("The connection was closed before even getting to update the status within a system. The odds of this happening normally are extremely low... Like someone would have to connection and then almost instantaneously close the connection:[");
 
@@ -82,7 +82,14 @@ async fn establish_and_maintain_each_client_ws_connection(
     send_message(
         &mut ws_stream,
         tungstenite::Message::binary(
-            ControlMessages::ServerInitiated(this_client.clone()).serialize(),
+            Envelope {
+                command: Command::ClientCommand(ClientCommand::ServerInitiated(
+                    this_client.clone(),
+                )),
+                sender: Entity::Server,
+                receiver: Entity::Client,
+            }
+            .serialize(),
         ),
     )
     .await;
@@ -105,7 +112,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                     match value {
                         Message::Text(text) => {info!("received text: {:?}", text);},
                         Message::Binary(bin) => {
-                            match ControlMessages::deserialize(&bin) {
+                            match Envelope::deserialize(&bin) {
                                 Ok(control_message) => {
                                     tx_server_state_manager.send((control_message, None)).await.unwrap();
                                 },
@@ -114,8 +121,9 @@ async fn establish_and_maintain_each_client_ws_connection(
                         },
                         Message::Close(reason) => {
             info!("The client is trying to close the connection for the following reason: {:?}", reason);
+            let package = Envelope{command: Command::ServerAndClientCommand(ServerAndClientCommand::ClosedConnection(this_client.clone())), sender: Entity::Client, receiver: Entity::Server};
             tx_server_state_manager
-                .send((ControlMessages::ClosedConnection(this_client.clone()),None))
+                .send((package,None))
                 .await
                 .expect("The connection was closed :[");
                 break // gets out of the loop... should deallocate everything?
@@ -140,13 +148,14 @@ async fn establish_and_maintain_each_client_ws_connection(
 }
 
 #[instrument]
-async fn send_messages_to_all_online_clients(clients : &mut  Vec<mpsc::Sender<ControlMessages>>, message : ControlMessages) {
-
+async fn send_messages_to_all_online_clients(
+    clients: &mut Vec<mpsc::Sender<Envelope>>,
+    message: Envelope,
+) {
     for client in clients.iter_mut() {
         let message = message.clone();
         client.send(message).await.unwrap();
     }
-
 }
 
 #[instrument]
@@ -169,12 +178,9 @@ async fn game_loop(
 
 #[instrument]
 async fn server_global_state_manager(
-    mut global_state_update_transceiver: Receiver<(
-        ControlMessages,
-        Option<mpsc::Sender<ControlMessages>>,
-    )>,
+    mut global_state_update_transceiver: Receiver<(Envelope, Option<mpsc::Sender<Envelope>>)>,
 ) {
-    let mut online_connections = HashMap::<uuid::Uuid,(Client, mpsc::Sender<ControlMessages>)>::new();
+    let mut online_connections = HashMap::<uuid::Uuid, (Client, mpsc::Sender<Envelope>)>::new();
 
     let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<u64>(10);
 
@@ -198,11 +204,11 @@ async fn server_global_state_manager(
 
             info!("Received connection in status_manager");
             let first_clone = control_message.clone();
-            
-            
-                
+
+
+
             match control_message {
-                ControlMessages::SdpRequest(sdp, message_direction) => {
+                Envelope::SdpRequest(sdp, message_direction) => {
                     info!("Received SdpRequest message with sdp: {:?}",sdp);
                     match message_direction {
                         MessageDirection::ClientToClient(flow) => {
@@ -215,26 +221,26 @@ async fn server_global_state_manager(
                         }
                     }
                 }
-                ControlMessages::SdpResponse(sdp,message_direction) => {
+                Envelope::SdpResponse(sdp,message_direction) => {
 
                 }
-                ControlMessages::ServerInitiated(client) => {
+                Envelope::ServerInitiated(client) => {
 
                     let mut client_connection = client_controller_channel.unwrap();
 
                     let message_direction = MessageDirection::ServerToClient(client.clone());
-                    client_connection.send(ControlMessages::ClientInfo(message_direction)).await.unwrap();
+                    client_connection.send(Envelope::ClientInfo(message_direction)).await.unwrap();
                     let client_id = client.user_id;
 
                     online_connections.insert(client_id, (client, client_connection));
 
-                    let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<ControlMessages>>) = online_connections.values().cloned().unzip();
+                    let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
 
-                    send_messages_to_all_online_clients(&mut client_connections, ControlMessages::OnlineClients(clients, current_round)).await
-                    
+                    send_messages_to_all_online_clients(&mut client_connections, Envelope::OnlineClients(clients, current_round)).await
+
                 }
-                ControlMessages::ClientInfo(message_direction) => {
+                Envelope::ClientInfo(message_direction) => {
                     match message_direction {
                         MessageDirection::ClientToClient(_) | MessageDirection::ServerToClient(_) => {info!("Not sure how to implement this");}
                         MessageDirection::ClientToServer(client) => {
@@ -249,37 +255,37 @@ async fn server_global_state_manager(
                                 }
                             }
 
-                            let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<ControlMessages>>) = online_connections.values().cloned().unzip();
+                            let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
 
-                    send_messages_to_all_online_clients(&mut client_connections, ControlMessages::OnlineClients(clients, current_round)).await
+                    send_messages_to_all_online_clients(&mut client_connections, Envelope::OnlineClients(clients, current_round)).await
                         }
                     }
-                    // ? Needs to be more specific what this should do on the server... maybe this problem will be taken care of when the ControlMessages are segmented based on where the message should be interpretted
+                    // ? Needs to be more specific what this should do on the server... maybe this problem will be taken care of when the Envelope are segmented based on where the message should be interpretted
                 }
-                ControlMessages::Message(_message, _direction) => {
+                Envelope::Message(_message, _direction) => {
                     // This is exactly why the controlMessages need to be segmented based on where they're needed!
                 }
-                ControlMessages::OnlineClients(_clients, _round_number) => {
+                Envelope::OnlineClients(_clients, _round_number) => {
                     // oof just not useful.
                 }
-                ControlMessages::ReadyForPartner(client) => {
+                Envelope::ReadyForPartner(client) => {
                     info!("{:?} would like to get partner please", client.user_id);
                     let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
-                    let (mut clients, _) : (HashSet<Client>, Vec<mpsc::Sender<ControlMessages>>) = online_connections.values().cloned().unzip();
+                    let (mut clients, _) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
 
                     let (_, temp_client_connection) = online_connections.get_mut(&client.user_id).unwrap();
-                    temp_client_connection.send(ControlMessages::OnlineClients(clients, current_round)).await.unwrap();
+                    temp_client_connection.send(Envelope::OnlineClients(clients, current_round)).await.unwrap();
                 }
-                ControlMessages::ClosedConnection(client) => {
+                Envelope::ClosedConnection(client) => {
 
                     online_connections.remove_entry(&client.user_id);
 
                     let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
-                    let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<ControlMessages>>) = online_connections.values().cloned().unzip();
+                    let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
-                    send_messages_to_all_online_clients(&mut client_connections, ControlMessages::OnlineClients(clients, current_round)).await
+                    send_messages_to_all_online_clients(&mut client_connections, Envelope::OnlineClients(clients, current_round)).await
                 }
 
 
@@ -305,7 +311,7 @@ async fn main() {
     let mut listener = TcpListener::bind("127.0.0.1:80").await.unwrap();
 
     let (global_state_updater_tx, global_state_updater_rx) =
-        mpsc::channel::<(ControlMessages, Option<mpsc::Sender<ControlMessages>>)>(10);
+        mpsc::channel::<(Envelope, Option<mpsc::Sender<Envelope>>)>(10);
 
     tokio::spawn(async {
         info!("setting up a status manager");
