@@ -91,27 +91,16 @@ impl MessageDirection {
 type RoundNumber = u64;
 
 
+
+
 #[derive(Debug, Serialize,Deserialize, Clone)]
-/// Server Commands are received on the server, created by the client. They need to be processed on the server ONLY.
-pub enum ServerCommand {
+pub enum Command {
     /// This indicates that this client is ready to be paired at whatever future round, the server will respond with a Self::OnlineClients variant
-    ReadyForPartner(Client),
-
-}
-
-
-#[derive(Debug, Serialize,Deserialize, Clone)]
-///These commands are meant to be processed by the clients
-pub enum ClientCommand {
+    ReadyForPartner(Client),    
     /// When the server is initiated, the server sends this to the client and the client responds in turn (of course, changing the MessageDirection).
     ServerInitiated(Client),
     /// This will show the client the available users on any particular round
     OnlineClients(HashSet<Client>, RoundNumber),
-}
-
-#[derive(Debug, Serialize,Deserialize, Clone)]
-///These commands are meant to be processed by the client and the server. These are usually for the purpose of upgrading connections to webRTC or for passing messages between clients 
-pub enum ServerAndClientCommand{
    /// This is sent from the server to the client in order to uniquely identify the client... Will need to store this in a database
    ClientInfo(Client),
    /// The Message Direction contains the sender and intended receiver
@@ -124,19 +113,12 @@ pub enum ServerAndClientCommand{
     ClosedConnection(Client),
 }
 
-
-#[derive(Debug, Serialize,Deserialize, Clone)]
-pub enum Command {
-ServerCommand(ServerCommand),
-ClientCommand(ClientCommand),
-ServerAndClientCommand(ServerAndClientCommand)
-}
-
 #[derive(Debug, Serialize,Deserialize, Clone)]
 pub struct Envelope{
-    sender: Entity,
-    receiver: Entity,
-    command: Command
+    pub sender: Entity,
+    pub intermediary: Option<Entity>,
+    pub receiver: Entity,
+    pub command: Command
 }
 
 impl Envelope {
@@ -164,18 +146,30 @@ impl Envelope {
 
 impl Command {
     pub fn switch_direction(&self) -> Self {
-        match self {
-            Command::ClientCommand(_) | Command::ServerCommand(_) => {self.clone()}
-            Command::ServerAndClientCommand(server_and_client_command) => {
-                match server_and_client_command {
-                    ServerAndClientCommand::ClientInfo(_client) => self.clone(),
-                    ServerAndClientCommand::Message(message, message_direction) => { Command::ServerAndClientCommand(ServerAndClientCommand::Message(message.clone(), message_direction.switch_direction()))},
-                    ServerAndClientCommand::SdpRequest(message, message_direction) => { Command::ServerAndClientCommand(ServerAndClientCommand::SdpRequest(message.clone(), message_direction.switch_direction()))},
-                    ServerAndClientCommand::SdpResponse(message, message_direction) => { Command::ServerAndClientCommand(ServerAndClientCommand::SdpResponse(message.clone(), message_direction.switch_direction()))},
-                    ServerAndClientCommand::ClosedConnection(_client) => {self.clone()}
-                }
-            }
 
+
+        match self {
+
+            
+            // Command::ClientCommand(_) | Command::ServerCommand(_) => {self.clone()}
+            // Command::ServerAndClientCommand(server_and_client_command) => {
+            //     match server_and_client_command {
+            //         ServerAndClientCommand::ClientInfo(_client) => self.clone(),
+            //         ServerAndClientCommand::Message(message, message_direction) => { Command::ServerAndClientCommand(ServerAndClientCommand::Message(message.clone(), message_direction.switch_direction()))},
+            //         ServerAndClientCommand::SdpRequest(message, message_direction) => { Command::ServerAndClientCommand(ServerAndClientCommand::SdpRequest(message.clone(), message_direction.switch_direction()))},
+            //         ServerAndClientCommand::SdpResponse(message, message_direction) => { Command::ServerAndClientCommand(ServerAndClientCommand::SdpResponse(message.clone(), message_direction.switch_direction()))},
+            //         ServerAndClientCommand::ClosedConnection(_client) => {self.clone()}
+            //     }
+            // }
+
+            Command::ReadyForPartner(_client) => {}  
+            Command::ServerInitiated(_client) => {}
+            Command::OnlineClients(_clients, _round_number) => {}
+            Command::ClientInfo(_client) => {}
+            Command::Message(message, message_direction) => {}
+            Command::SdpRequest(sdp, _) => {}
+            Command::SdpResponse(_, _) => {}
+            Command::ClosedConnection(_) => {}
         }
     }
 

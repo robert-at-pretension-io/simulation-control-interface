@@ -205,91 +205,98 @@ async fn server_global_state_manager(
             info!("Received connection in status_manager");
             let first_clone = control_message.clone();
 
-
-
-            match control_message {
-                Envelope::SdpRequest(sdp, message_direction) => {
-                    info!("Received SdpRequest message with sdp: {:?}",sdp);
-                    match message_direction {
-                        MessageDirection::ClientToClient(flow) => {
-                            info!("resending the following information: {:?}",first_clone );
-                            let receiver = flow.receiver.clone();
-                            online_connections.get_mut(&receiver).unwrap().1.send(first_clone.switch_direction()).await.unwrap();
-                        }
-                        MessageDirection::ClientToServer(_) | MessageDirection::ServerToClient(_) => {
-                            info!("This type of message should only be between clients in order to setup sdprequest/response/ice-handling");
-                        }
-                    }
-                }
-                Envelope::SdpResponse(sdp,message_direction) => {
+                if control_message.receiver == Entity::Server {
+                    
 
                 }
-                Envelope::ServerInitiated(client) => {
-
-                    let mut client_connection = client_controller_channel.unwrap();
-
-                    let message_direction = MessageDirection::ServerToClient(client.clone());
-                    client_connection.send(Envelope::ClientInfo(message_direction)).await.unwrap();
-                    let client_id = client.user_id;
-
-                    online_connections.insert(client_id, (client, client_connection));
-
-                    let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
-
-
-                    send_messages_to_all_online_clients(&mut client_connections, Envelope::OnlineClients(clients, current_round)).await
-
-                }
-                Envelope::ClientInfo(message_direction) => {
-                    match message_direction {
-                        MessageDirection::ClientToClient(_) | MessageDirection::ServerToClient(_) => {info!("Not sure how to implement this");}
-                        MessageDirection::ClientToServer(client) => {
-
-                            info!("received the following updated client info: {:?}", client);
-                            match online_connections.get_mut(&client.user_id) {
-                                Some((old_client, client_connection)) => {
-                                    old_client.replace_with_newer_values(client).unwrap()
-                                },
-                                None => {
-                                    // nooo
-                                }
-                            }
-
-                            let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
-
-
-                    send_messages_to_all_online_clients(&mut client_connections, Envelope::OnlineClients(clients, current_round)).await
-                        }
-                    }
-                    // ? Needs to be more specific what this should do on the server... maybe this problem will be taken care of when the Envelope are segmented based on where the message should be interpretted
-                }
-                Envelope::Message(_message, _direction) => {
-                    // This is exactly why the controlMessages need to be segmented based on where they're needed!
-                }
-                Envelope::OnlineClients(_clients, _round_number) => {
-                    // oof just not useful.
-                }
-                Envelope::ReadyForPartner(client) => {
-                    info!("{:?} would like to get partner please", client.user_id);
-                    let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
-                    let (mut clients, _) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
-
-
-                    let (_, temp_client_connection) = online_connections.get_mut(&client.user_id).unwrap();
-                    temp_client_connection.send(Envelope::OnlineClients(clients, current_round)).await.unwrap();
-                }
-                Envelope::ClosedConnection(client) => {
-
-                    online_connections.remove_entry(&client.user_id);
-
-                    let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
-                    let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
-
-                    send_messages_to_all_online_clients(&mut client_connections, Envelope::OnlineClients(clients, current_round)).await
+                else {
+                    info!("The following was received by the server but not addressed to the server: {:?}", first_clone);
                 }
 
+            // match control_message {
+                
+            //     Envelope::SdpRequest(sdp, message_direction) => {
+            //         info!("Received SdpRequest message with sdp: {:?}",sdp);
+            //         match message_direction {
+            //             MessageDirection::ClientToClient(flow) => {
+            //                 info!("resending the following information: {:?}",first_clone );
+            //                 let receiver = flow.receiver.clone();
+            //                 online_connections.get_mut(&receiver).unwrap().1.send(first_clone.switch_direction()).await.unwrap();
+            //             }
+            //             MessageDirection::ClientToServer(_) | MessageDirection::ServerToClient(_) => {
+            //                 info!("This type of message should only be between clients in order to setup sdprequest/response/ice-handling");
+            //             }
+            //         }
+            //     }
+            //     Envelope::SdpResponse(sdp,message_direction) => {
 
-            }
+            //     }
+            //     Envelope::ServerInitiated(client) => {
+
+            //         let mut client_connection = client_controller_channel.unwrap();
+
+            //         let message_direction = MessageDirection::ServerToClient(client.clone());
+            //         client_connection.send(Envelope::ClientInfo(message_direction)).await.unwrap();
+            //         let client_id = client.user_id;
+
+            //         online_connections.insert(client_id, (client, client_connection));
+
+            //         let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+
+
+            //         send_messages_to_all_online_clients(&mut client_connections, Envelope::OnlineClients(clients, current_round)).await
+
+            //     }
+            //     Envelope::ClientInfo(message_direction) => {
+            //         match message_direction {
+            //             MessageDirection::ClientToClient(_) | MessageDirection::ServerToClient(_) => {info!("Not sure how to implement this");}
+            //             MessageDirection::ClientToServer(client) => {
+
+            //                 info!("received the following updated client info: {:?}", client);
+            //                 match online_connections.get_mut(&client.user_id) {
+            //                     Some((old_client, client_connection)) => {
+            //                         old_client.replace_with_newer_values(client).unwrap()
+            //                     },
+            //                     None => {
+            //                         // nooo
+            //                     }
+            //                 }
+
+            //                 let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+
+
+            //         send_messages_to_all_online_clients(&mut client_connections, Envelope::OnlineClients(clients, current_round)).await
+            //             }
+            //         }
+            //         // ? Needs to be more specific what this should do on the server... maybe this problem will be taken care of when the Envelope are segmented based on where the message should be interpretted
+            //     }
+            //     Envelope::Message(_message, _direction) => {
+            //         // This is exactly why the controlMessages need to be segmented based on where they're needed!
+            //     }
+            //     Envelope::OnlineClients(_clients, _round_number) => {
+            //         // oof just not useful.
+            //     }
+            //     Envelope::ReadyForPartner(client) => {
+            //         info!("{:?} would like to get partner please", client.user_id);
+            //         let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
+            //         let (mut clients, _) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+
+
+            //         let (_, temp_client_connection) = online_connections.get_mut(&client.user_id).unwrap();
+            //         temp_client_connection.send(Envelope::OnlineClients(clients, current_round)).await.unwrap();
+            //     }
+            //     Envelope::ClosedConnection(client) => {
+
+            //         online_connections.remove_entry(&client.user_id);
+
+            //         let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
+            //         let (mut clients, mut client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+
+            //         send_messages_to_all_online_clients(&mut client_connections, Envelope::OnlineClients(clients, current_round)).await
+            //     }
+
+
+            // }
             }
 
 
