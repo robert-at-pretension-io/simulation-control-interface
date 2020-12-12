@@ -1,7 +1,7 @@
 use bincode;
 use serde::{Serialize, Deserialize};
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 
 
@@ -41,52 +41,40 @@ impl Client {
     }
 }
 
-
-#[derive(Debug, Serialize,Deserialize, Clone, Eq, PartialEq)]
-pub enum Entity {
-     Client,
-     Server
+#[derive(Debug, Serialize,Deserialize, Clone, Eq, PartialEq, Hash)]
+pub enum EntityTypes {
+    Client,
+    Server
 }
-#[derive(Debug, Serialize,Deserialize, Clone, Eq, PartialEq)]
-pub enum DetailedEntity {
+
+#[derive(Debug, Serialize,Deserialize, Clone, Eq, PartialEq, Hash)]
+pub struct Entity {
+     entity_type : EntityTypes,
+     entity_detail: EntityDetails
+}
+
+impl Entity {
+    pub fn new(entity_detail : EntityDetails) -> Entity {
+        let entity_type = match entity_detail {
+            EntityDetails::Client(uuid) => EntityTypes::Client,
+            EntityDetails::Server => EntityTypes::Server
+        };
+
+        Entity {
+            entity_type,
+            entity_detail
+        }
+    }
+}
+
+
+#[derive(Debug, Serialize,Deserialize, Clone, Eq, PartialEq, Hash)]
+pub enum EntityDetails {
     Client(uuid::Uuid),
     Server
 }
 
-#[derive(Debug, Serialize,Deserialize, Clone, Eq, PartialEq)]
-pub struct InformationFlow {
-    pub sender: DetailedEntity,
-    pub receiver: DetailedEntity
-}
 
-impl InformationFlow{
-    fn switch_direction(&self) -> Self {
-        Self{
-            sender: self.receiver.clone(),
-            receiver: self.sender.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize,Deserialize, Clone, Eq, PartialEq)]
-pub enum MessageDirection {
-    BetweenClientAndServer(InformationFlow),
-    /// The first client will be the sender and the second will be the receiver 
-    BetweenClientAndClient(InformationFlow)
-}
-
-impl MessageDirection {
-    pub fn switch_direction(&self) -> Self {
-        match self {
-            MessageDirection::BetweenClientAndClient(information_flow) => {
-                MessageDirection::BetweenClientAndClient(information_flow.switch_direction())
-            }
-            MessageDirection::BetweenClientAndServer(information_flow) => {
-                MessageDirection::BetweenClientAndServer(information_flow.switch_direction())
-            }
-        }
-    }
-}
 
 type RoundNumber = u64;
 
@@ -104,11 +92,11 @@ pub enum Command {
    /// This is sent from the server to the client in order to uniquely identify the client... Will need to store this in a database
    ClientInfo(Client),
    /// The Message Direction contains the sender and intended receiver
-   Message(String, MessageDirection),
+   Message(String),
    /// The string contains the content of the sdp message
-   SdpRequest(String, MessageDirection),
+   SdpRequest(String),
    /// The receiver in the message direction is the client that initially sent the SDP Request 
-   SdpResponse(String, MessageDirection),
+   SdpResponse(String),
     /// This is used for ending the websocket connection between the client and the server. The message direction indicates who has initiated the closure.
     ClosedConnection(Client),
 }
@@ -122,7 +110,14 @@ pub struct Envelope{
 }
 
 impl Envelope {
-    
+    pub fn new(sender: EntityDetails, receiver: EntityDetails, intermediary: Option<EntityDetails>, command : Command) -> Envelope {
+        Envelope {
+            sender : Entity::new(sender),
+            receiver : Entity::new(receiver),
+            intermediary : intermediary.map_or(None, |ent| Some(Entity::new(ent))),
+            command
+        }
+    }
 
     pub fn serialize(&self) -> Vec<u8>{
         match bincode::serialize(self) {
@@ -140,25 +135,7 @@ impl Envelope {
             sender : self.receiver.clone(),
             intermediary : self.intermediary.clone(),
             receiver : self.sender.clone(),
-            command : self.command.switch_direction(),
+            command : self.command.clone()
         }
     }
-}
-
-impl Command {
-    pub fn switch_direction(&self) -> Self {
-
-
-        match self {
-            Command::ReadyForPartner(_client) => {self.clone()}  
-            Command::ServerInitiated(_client) => {self.clone()}
-            Command::OnlineClients(_clients, _round_number) => {self.clone()}
-            Command::ClientInfo(_client) => {self.clone()}
-            Command::Message(message, message_direction) => {Command::Message(message.clone(), message_direction.switch_direction())}
-            Command::SdpRequest(sdp, message_direction) => {Command::SdpRequest(sdp.clone(), message_direction.switch_direction())}
-            Command::SdpResponse(sdp, message_direction) => {Command::SdpRequest(sdp.clone(), message_direction.switch_direction())}
-            Command::ClosedConnection(_client) => {self.clone()}
-        }
-    }
-
 }
