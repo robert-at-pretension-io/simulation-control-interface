@@ -138,6 +138,7 @@ impl Envelope {
     pub fn switch_direction(&self) -> Self {
         Self {
             sender : self.receiver.clone(),
+            intermediary : self.intermediary.clone(),
             receiver : self.sender.clone(),
             command : self.command.switch_direction(),
         }
@@ -149,27 +150,14 @@ impl Command {
 
 
         match self {
-
-            
-            // Command::ClientCommand(_) | Command::ServerCommand(_) => {self.clone()}
-            // Command::ServerAndClientCommand(server_and_client_command) => {
-            //     match server_and_client_command {
-            //         ServerAndClientCommand::ClientInfo(_client) => self.clone(),
-            //         ServerAndClientCommand::Message(message, message_direction) => { Command::ServerAndClientCommand(ServerAndClientCommand::Message(message.clone(), message_direction.switch_direction()))},
-            //         ServerAndClientCommand::SdpRequest(message, message_direction) => { Command::ServerAndClientCommand(ServerAndClientCommand::SdpRequest(message.clone(), message_direction.switch_direction()))},
-            //         ServerAndClientCommand::SdpResponse(message, message_direction) => { Command::ServerAndClientCommand(ServerAndClientCommand::SdpResponse(message.clone(), message_direction.switch_direction()))},
-            //         ServerAndClientCommand::ClosedConnection(_client) => {self.clone()}
-            //     }
-            // }
-
-            Command::ReadyForPartner(_client) => {}  
-            Command::ServerInitiated(_client) => {}
-            Command::OnlineClients(_clients, _round_number) => {}
-            Command::ClientInfo(_client) => {}
-            Command::Message(message, message_direction) => {}
-            Command::SdpRequest(sdp, _) => {}
-            Command::SdpResponse(_, _) => {}
-            Command::ClosedConnection(_) => {}
+            Command::ReadyForPartner(_client) => {self.clone()}  
+            Command::ServerInitiated(_client) => {self.clone()}
+            Command::OnlineClients(_clients, _round_number) => {self.clone()}
+            Command::ClientInfo(_client) => {self.clone()}
+            Command::Message(message, message_direction) => {Command::Message(message.clone(), message_direction.switch_direction())}
+            Command::SdpRequest(sdp, message_direction) => {Command::SdpRequest(sdp.clone(), message_direction.switch_direction())}
+            Command::SdpResponse(sdp, message_direction) => {Command::SdpRequest(sdp.clone(), message_direction.switch_direction())}
+            Command::ClosedConnection(_client) => {self.clone()}
         }
     }
 
