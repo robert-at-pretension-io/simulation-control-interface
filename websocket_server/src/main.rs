@@ -19,8 +19,7 @@ use log::{info, warn};
 use tracing::{instrument, Level};
 
 use models::{
-    Client, ClientCommand, Command, DetailedEntity, Entity, Envelope, InformationFlow,
-    MessageDirection, ServerAndClientCommand, ServerCommand,
+    Client, Command,  Entity, Envelope, EntityDetails, EntityTypes
 };
 
 #[instrument()]

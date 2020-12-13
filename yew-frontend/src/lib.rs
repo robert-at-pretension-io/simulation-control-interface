@@ -1,4 +1,4 @@
-#![recursion_limit = "512"]
+#![recursion_limit="1016"]
 
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
@@ -13,7 +13,7 @@ use wasm_bindgen::JsCast;
 use yew::prelude::*;
 
 // This local trait is for shared objects between the frontend and the backend
-use models::{Client, Command, MessageDirection, InformationFlow, Entity, DetailedEntity, Envelope, ClientCommand, ServerCommand, ServerAndClientCommand};
+use models::{Client, Command, Entity,  Envelope, EntityDetails};
 
 use std::net::SocketAddr;
 
@@ -69,12 +69,14 @@ enum Msg {
     UpdateUsername(String),
     SetClient(Client),
     ClearLog,
-    ReceivedIceCandidate(String, MessageDirection),
-    SendIceCandidate(String, MessageDirection),
-    SdpRequest(String, MessageDirection),
+    ReceivedIceCandidate(String),
+    SendIceCandidate(String),
+    MakeSdpRequest(String, uuid::Uuid),
+    MakeSdpResponse(String, uuid::Uuid),
+
     /// The string will indicate the client user_id field
     MakeSdpRequestToClient(Uuid),
-    SdpResponse(String, MessageDirection),
+    SdpResponse(String),
     ResetPage,
     InitiateWebsocketConnectionProcess,
     LogEvent(String),
@@ -144,7 +146,7 @@ self.user_id = Some(client.user_id);
         }
     }
 
-    fn send_ws_message(&mut self, data: ControlMessages) {
+    fn send_ws_message(&mut self, data: Envelope) {
         let ws = self.websocket.take().unwrap();
 
         let message = data.clone();
@@ -197,14 +199,14 @@ self.user_id = Some(client.user_id);
             if let Ok(abuf) = e.data().dyn_into::<js_sys::ArrayBuffer>() {
                 let array = js_sys::Uint8Array::new(&abuf);
 
-                match ControlMessages::deserialize(&array.to_vec()) {
-                    Ok(result) => match result.commmand {
-                        // only need to take care of the messages that are intended to be handled on the client
-
-                        Command::ServerCommand(_) => cloned.send_message(Msg::LogEvent(format!("Should not need to implement these on the client"))),
-                        ControlMessages::ClientCommand(client_command) => {
-                            match client_command {
-                                models::ClientCommand::ServerInitiated(client) => {
+                match Envelope::deserialize(&array.to_vec()) {
+                    Ok(result) => {
+                        let sender = result.sender;
+                        let receiver = result.receiver;
+                        let intermediary = result.intermediary;
+                        match result.command {
+                            
+                                Command::ServerInitiated(client) => {
                                     let messages = vec!(Msg::LogEvent(format!("{:?} Connected To Websocket Server!", client)),
                                     Msg::SetClient(client.clone()),
                                     Msg::AddState(State::ConnectedToWebsocketServer),
@@ -213,61 +215,27 @@ self.user_id = Some(client.user_id);
 
 
                                 }
-                                models::ClientCommand::OnlineClients(clients, _round_number) => {
+                                Command::OnlineClients(clients, _round_number) => {
                                     cloned.send_message(Msg::UpdateOnlineUsers(clients))
                                 }
-
-
-                            }
-                        },
-                        ControlMessages::ServerAndClientCommand(server_and_client_command) => {
-                            match server_and_client_command {
-                                models::ServerAndClientCommand::ClientInfo(client, message_direction) => {
-                                    match message_direction {
-                                        MessageDirection::BetweenClientAndClient(_) => {},
-                                        MessageDirection::BetweenClientAndServer(flow) => {
-                                            if flow.sender == Entity::Server {
-                                                cloned.send_message(Msg::SetClient(client));
-                                            }
-                                        } 
-                                    }
-                                }
-                                models::ServerAndClientCommand::Message(_, _) => {}
-                                models::ServerAndClientCommand::SdpRequest(_, _) => {}
-                                models::ServerAndClientCommand::SdpResponse(response, message_direction) => {
-                                    cloned.send_message(Msg::SdpResponse(response, message_direction));
-                                }
-                                models::ServerAndClientCommand::ClosedConnection(_) => {}
-                            }
-                        }
-
-
-
-
-                            
-                    //     }
-                    //     ControlMessages::SdpResponse(response, message_direction) => {
-                    //         cloned.send_message(Msg::SdpResponse(response, message_direction));
-                    //     }
-                    //     ControlMessages::SdpRequest(request, message_direction) => {
-                    //         cloned.send_message(Msg::SdpRequest(request, message_direction));
-                        
-                    //     }
-
-                    //     ControlMessages::Message(message, _directionality) => {
-                    //         cloned.send_message(Msg::ServerSentWsMessage(message));
-                    //     }
-
-                    //     ControlMessages::ReadyForPartner(_client) => {}
-                    //     ControlMessages::ClosedConnection(_) => {
-                    //         cloned.send_message(Msg::ResetPage)
-                    //     }
-                    },
-                    Err(oh_no) => {
-                        cloned.send_message(Msg::ServerSentWsMessage(oh_no.to_string()));
+                                Command::ClientInfo(client) => {
+                                    cloned.send_message(Msg::SetClient(client));
+                               
                     }
-                }
-            }
+
+
+                                Command::ReadyForPartner(client) => {cloned.send_message(Msg::ServerSentWsMessage(format!("Ready for partner acknowledged by server")));}
+                            
+                        Command::SdpRequest(request) => {cloned.send_message(Msg::MakeSdpResponse(request));}
+                        Command::SdpResponse(response) => {cloned.send_message(Msg::SdpResponse(response));}
+                        Command::ClosedConnection(client) => {cloned.send_message(Msg::ResetPage)}
+                    }}
+                            Err(uhh) => {cloned.send_message(Msg::LogEvent(format!("found an error while receiving a message from the ws server: {}", uhh)));}
+                };
+               
+             
+                    }
+               
         }) as Box<dyn FnMut(MessageEvent)>);
         // set message event handler on WebSocket
         ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
@@ -302,23 +270,13 @@ impl Component for Model {
                 self.event_log = Vec::<String>::new();
                 true
             }
-            Msg::SdpRequest(sdp, message_direction) => {
-                let message_direction_clone = message_direction.clone();
-                
-                match message_direction {
-                    MessageDirection::BetweenClientAndClient(flow) => {
-                        
-                        if flow.sender == self.user_id.unwrap()  {
-                            self.link.send_message(Msg::SendWsMessage(ControlMessages::SdpRequest(sdp.clone(), message_direction_clone)));
-                        }
-                        if flow.receiver == self.user_id.unwrap(){
-                            self.link.send_message(Msg::LogEvent(format!("Need to process the sdp request: {} from the client with id: {}", sdp, flow.receiver)));
-                        }
-                    } 
-                    MessageDirection::ClientToServer(_) | MessageDirection::ServerToClient(_) => {
-                        self.link.send_message(Msg::LogEvent(format!("SdpRequest is messing up...")));
-                    }
-                }
+            Msg::MakeSdpRequest(sdp, receiver) => {
+                let envelope = Envelope::new(
+                    sender: EntityDetails::Client(self.user_id.unwrap()), 
+                    receiver: EntityDetails::Client(receiver),
+                    intermediary: EntityDetails::Server
+            )
+                self.link.send_message(Msg::SendWsMessage(Command::SdpRequest(sdp.clone())));
                 true
             }
             Msg::ResetPage => {
@@ -326,7 +284,7 @@ impl Component for Model {
                 true
             },
             Msg::RequestUsersOnline(client)=> {
-                self.send_ws_message(ControlMessages::ReadyForPartner(client.clone()));
+                self.send_ws_message(Command::ReadyForPartner(client.clone()));
                 
                 true
             },
@@ -339,58 +297,36 @@ impl Component for Model {
                 let cloned_message = control_message.clone();
 
                 match cloned_message {
-                    ControlMessages::ServerInitiated(_) => {
+                    Command::ServerInitiated(_) => {
                         self.link.send_message(Msg::LogEvent(format!(
                             "ServerInitiated isn't implemented on the client side"
                         )))
                     }
-                    ControlMessages::ClientInfo(message_direction) => {
+                    Command::ClientInfo(message_direction) => {
                         
-                        match message_direction {
-                            MessageDirection::ServerToClient(client) => {
-                                self.link.send_message(Msg::LogEvent(
-                                    format!("ClientInfo isn't implemented on the client side."),
-                                ))
-                                
-                            }
-                            MessageDirection::ClientToClient(_) => {
-                                self.link.send_message(Msg::LogEvent(
-                                    format!("ClientInfo isn't implemented on the client side."),
-                                ))
-                            }
-                            MessageDirection::ClientToServer(_)   => {
                                 self.link.send_message(Msg::LogEvent(
                                     format!("Trying to change username..."),
                                 ));
                                 // self.link.send_message(Msg::UpdateUsername(client.username.unwrap()))
                                 self.send_ws_message(control_message)
                                 
-                            }
+                            
                         }
                         
                 
-                }
+                
                     
                     ,
-                    ControlMessages::Message(_, message_direction) => match message_direction
-                    {
-                        MessageDirection::ClientToClient(flow) => {
-                            self.send_ws_message(control_message);
-                        }
-                        MessageDirection::ServerToClient(_) => {}
-                        MessageDirection::ClientToServer(_t) => {
-                            self.send_ws_message(control_message);
-                        }
-                    },
-                    ControlMessages::OnlineClients(_, _) => self.link.send_message(Msg::LogEvent(
+
+                    Command::OnlineClients(_, _) => self.link.send_message(Msg::LogEvent(
                         format!("OnlineClients isn't implemented on the client side."),
                     )),
-                    ControlMessages::ReadyForPartner(client) => {
-                        self.send_ws_message(ControlMessages::ReadyForPartner(client))
+                    Command::ReadyForPartner(client) => {
+                        self.send_ws_message(Command::ReadyForPartner(client))
                     }
-                    ControlMessages::ClosedConnection(_) => {}
-                    ControlMessages::SdpRequest(_, _) => {}
-                    ControlMessages::SdpResponse(_, _) => {}
+                    Command::ClosedConnection(_) => {}
+                    Command::SdpRequest(_, _) => {}
+                    Command::SdpResponse(_, _) => {}
                 }
 
                 true
@@ -459,7 +395,7 @@ impl Component for Model {
             }
             Msg::UpdateUsername(username) => {
                 self.username = Some(username.clone());
-                let msg = Msg::SendWsMessage(ControlMessages::ClientInfo(
+                let msg = Msg::SendWsMessage(Command::ClientInfo(
                     MessageDirection::ClientToServer(Client{
                         email: None, user_id : self.user_id.clone().unwrap(), username : Some(username), current_socket_addr : None
                     })
@@ -483,8 +419,8 @@ impl Component for Model {
 
                 true
             }
-            Msg::ReceivedIceCandidate(_, _) => {false}
-            Msg::SendIceCandidate(_, _) => {false}
+            Msg::ReceivedIceCandidate(_) => {false}
+            Msg::SendIceCandidate(_) => {false}
             Msg::MakeSdpRequestToClient(receiver ) => {
                 // let sender_lookup = Client::from_user_id(user_id);
 
@@ -498,7 +434,8 @@ impl Component for Model {
                 self.link.send_message_batch(messages);
                 true
             }
-            Msg::SdpResponse(_, _) => {false}
+            Msg::SdpResponse(_) => {false}
+            Msg::ReceiveSdpRequest(_) => {}
         }
     }
 
