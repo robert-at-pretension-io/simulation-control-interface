@@ -226,7 +226,7 @@ self.user_id = Some(client.user_id);
 
                                 Command::ReadyForPartner(client) => {cloned.send_message(Msg::ServerSentWsMessage(format!("Ready for partner acknowledged by server")));}
                             
-                        Command::SdpRequest(request) => {cloned.send_message(Msg::MakeSdpResponse(request));}
+                        Command::SdpRequest(request) => {cloned.send_message(Msg::MakeSdpResponse(request, sender.get_uuid().unwrap()));}
                         Command::SdpResponse(response) => {cloned.send_message(Msg::SdpResponse(response));}
                         Command::ClosedConnection(client) => {cloned.send_message(Msg::ResetPage)}
                     }}
@@ -272,11 +272,12 @@ impl Component for Model {
             }
             Msg::MakeSdpRequest(sdp, receiver) => {
                 let envelope = Envelope::new(
-                    sender: EntityDetails::Client(self.user_id.unwrap()), 
-                    receiver: EntityDetails::Client(receiver),
-                    intermediary: EntityDetails::Server
-            )
-                self.link.send_message(Msg::SendWsMessage(Command::SdpRequest(sdp.clone())));
+                    EntityDetails::Client(self.user_id.unwrap()), 
+                    EntityDetails::Client(receiver),
+                     Some(EntityDetails::Server),
+                    Command::SdpRequest(sdp.clone())
+            );
+                self.link.send_message(Msg::SendWsMessage(envelope));
                 true
             }
             Msg::ResetPage => {
@@ -284,7 +285,13 @@ impl Component for Model {
                 true
             },
             Msg::RequestUsersOnline(client)=> {
-                self.send_ws_message(Command::ReadyForPartner(client.clone()));
+                let envelope = Envelope::new(
+                    EntityDetails::Client(client.user_id.clone()),
+                    EntityDetails::Server,
+                    None,
+                    Command::ReadyForPartner(client.clone())
+                );
+                self.send_ws_message(envelope);
                 
                 true
             },
@@ -293,41 +300,8 @@ impl Component for Model {
                     "Sending Message to server: {:?}",
                     &control_message
                 )));
+                self.send_ws_message(control_message);
 
-                let cloned_message = control_message.clone();
-
-                match cloned_message {
-                    Command::ServerInitiated(_) => {
-                        self.link.send_message(Msg::LogEvent(format!(
-                            "ServerInitiated isn't implemented on the client side"
-                        )))
-                    }
-                    Command::ClientInfo(message_direction) => {
-                        
-                                self.link.send_message(Msg::LogEvent(
-                                    format!("Trying to change username..."),
-                                ));
-                                // self.link.send_message(Msg::UpdateUsername(client.username.unwrap()))
-                                self.send_ws_message(control_message)
-                                
-                            
-                        }
-                        
-                
-                
-                    
-                    ,
-
-                    Command::OnlineClients(_, _) => self.link.send_message(Msg::LogEvent(
-                        format!("OnlineClients isn't implemented on the client side."),
-                    )),
-                    Command::ReadyForPartner(client) => {
-                        self.send_ws_message(Command::ReadyForPartner(client))
-                    }
-                    Command::ClosedConnection(_) => {}
-                    Command::SdpRequest(_, _) => {}
-                    Command::SdpResponse(_, _) => {}
-                }
 
                 true
             }
@@ -395,13 +369,20 @@ impl Component for Model {
             }
             Msg::UpdateUsername(username) => {
                 self.username = Some(username.clone());
-                let msg = Msg::SendWsMessage(Command::ClientInfo(
-                    MessageDirection::ClientToServer(Client{
-                        email: None, user_id : self.user_id.clone().unwrap(), username : Some(username), current_socket_addr : None
-                    })
+                let user_id = self.user_id.clone().unwrap();
 
-                ));
-                self.link.send_message(msg);
+                let envelope = Envelope::new(
+                    EntityDetails::Client(user_id.clone()),
+                    EntityDetails::Server,
+                    None,
+                    Command::ClientInfo(
+                        Client{
+                            email: None, user_id : user_id.clone(), username : Some(username), current_socket_addr : None
+                        })
+
+                    );
+            
+                self.send_ws_message(envelope);
                 true
             }
             Msg::UpdateOnlineUsers(clients) => {
@@ -426,9 +407,15 @@ impl Component for Model {
 
                 let sender = self.user_id.unwrap().clone();
 
+                let envelope = Envelope::new(
+                    EntityDetails::Client(sender), 
+                    EntityDetails::Client(receiver), 
+                    None, 
+                    command)
+
             
                 let messages : Vec<Msg> = vec![Msg::LogEvent(format!("Need to make Sdp Request for {:?}", &receiver)),
-                Msg::SdpRequest(format!("sdpRequest"), MessageDirection::ClientToClient(InformationFlow{sender, receiver}))
+                Msg::MakeSdpRequest(format!("sdpRequest"), MessageDirection::ClientToClient(InformationFlow{sender, receiver}))
                 ];
 
                 self.link.send_message_batch(messages);

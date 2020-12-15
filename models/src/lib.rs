@@ -65,6 +65,12 @@ impl Entity {
             entity_detail
         }
     }
+    pub fn get_uuid(&self) -> Option<uuid::Uuid> {
+        match self.entity_detail {
+            EntityDetails::Client(uuid) => {Some(uuid)},
+            EntityDetails::Server => {None}
+        }
+    }
 }
 
 
@@ -116,6 +122,8 @@ impl Envelope {
             command
         }
     }
+
+    
 
     
 
