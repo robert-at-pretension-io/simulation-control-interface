@@ -5,8 +5,6 @@ use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 
 
-// flip... too much going on today. Well I sorta just want to sleep :/
-
 #[derive(Debug, Serialize,Deserialize, Eq, Hash, Clone)]
 pub struct Client {
     pub username: Option<String>,
