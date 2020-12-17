@@ -1,4 +1,4 @@
-#![recursion_limit="1016"]
+#![recursion_limit = "1016"]
 
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
@@ -13,24 +13,20 @@ use wasm_bindgen::JsCast;
 use yew::prelude::*;
 
 // This local trait is for shared objects between the frontend and the backend
-use models::{Client, Command, Entity,  Envelope, EntityDetails};
+use models::{Client, Command, Entity, EntityDetails, Envelope};
 
 use std::net::SocketAddr;
 
-
 use std::collections::HashSet;
-
-
 
 // all of these are for webrtc
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{
-     RtcDataChannelEvent, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
+    RtcDataChannelEvent, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
     RtcSessionDescriptionInit,
 };
-
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 enum State {
@@ -42,9 +38,9 @@ static WEBSOCKET_URL: &str = "ws://127.0.0.1:80";
 
 struct Model {
     event_log: Vec<String>,
-connection_socket_address : Option<SocketAddr>,
-    user_id : Option<uuid::Uuid>,
-    username : Option<String>,
+    connection_socket_address: Option<SocketAddr>,
+    user_id: Option<uuid::Uuid>,
+    username: Option<String>,
     partner: Option<Client>,
     link: ComponentLink<Self>,
     websocket: Option<WebSocket>,
@@ -54,17 +50,16 @@ connection_socket_address : Option<SocketAddr>,
 
 impl Model {
     fn reset_state(&mut self) {
-            self.username = None;
-            self.user_id = None;
-            self.connection_socket_address = None;
-            self.partner =  None;
-            self.websocket = None;
-            self.peers = HashSet::new();
-            self.states = HashSet::new();
-
+        self.username = None;
+        self.user_id = None;
+        self.connection_socket_address = None;
+        self.partner = None;
+        self.websocket = None;
+        self.peers = HashSet::new();
+        self.states = HashSet::new();
     }
 }
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone)]
 enum Msg {
     UpdateUsername(String),
     SetClient(Client),
@@ -92,57 +87,57 @@ enum Msg {
 extern crate web_sys;
 
 impl Model {
-
-    fn full_client_info_from_user_id(&self, user_id : uuid::Uuid) -> Result<Client, String> {
-        let client = self.peers.get(&Client::from_user_id(user_id)).clone().to_owned();
+    fn full_client_info_from_user_id(&self, user_id: uuid::Uuid) -> Result<Client, String> {
+        let client = self
+            .peers
+            .get(&Client::from_user_id(user_id))
+            .clone()
+            .to_owned();
         match client {
-            Some(client) => {Ok(client.to_owned())},
-            None => {Err(format!("The client wasn't found in the online peer set."))}
+            Some(client) => Ok(client.to_owned()),
+            None => Err(format!("The client wasn't found in the online peer set.")),
         }
     }
 
-    fn client_to_model(&mut self, client : Client) {
-self.connection_socket_address = client.current_socket_addr;
-self.username = client.username;
-self.user_id = Some(client.user_id);
+    fn client_to_model(&mut self, client: Client) {
+        self.connection_socket_address = client.current_socket_addr;
+        self.username = client.username;
+        self.user_id = Some(client.user_id);
     }
 
     fn show_welcome_message(&self) -> Html {
+        {
+            if self.username.is_none() {
+                {
+                    if self.states.contains(&State::ConnectedToWebsocketServer) {
+                        html!(
+                            <>
 
-        {if self.username.is_none() {
-            
-                {if self.states.contains(&State::ConnectedToWebsocketServer) {
+                            <button onclick=self.link.callback( |_| { Msg::UpdateUsername(format!("Alice"))
 
-                    html!(
-                    <>
+                        }   )> {"Set username Alice"} </button>
 
-                    <button onclick=self.link.callback( |_| { Msg::UpdateUsername(format!("Alice"))
+                        <button onclick=self.link.callback( |_| { Msg::UpdateUsername(format!("Bob"))
 
-                }   )> {"Set username Alice"} </button>
+                        }   )> {"Set username Bob"} </button>
+                            </>
 
-                <button onclick=self.link.callback( |_| { Msg::UpdateUsername(format!("Bob"))
+                            )
+                    } else {
+                        html!(<></>)
+                    }
+                }
+            } else {
+                //Username IS set!
+                html!(
+                    <div>
+                    //, self.client.clone().unwrap().username.unwrap()
+                    {format!("Welcome {}", self.username.as_ref().unwrap())}
 
-                }   )> {"Set username Bob"} </button>
-                    </>
-                    
-                    )
-              
+                    </div>
 
-            } else { html!(<></>)}
-        }
-        
-        }
-        else{ //Username IS set!
-            html!(
-                <div>
-                //, self.client.clone().unwrap().username.unwrap()
-                {format!("Welcome {}", self.username.as_ref().unwrap())}
-
-                </div>
-
-            )
-        }
-        
+                )
+            }
         }
     }
 
@@ -153,15 +148,15 @@ self.user_id = Some(client.user_id);
 
         let data = &data.serialize();
 
-        
-
         match ws.send_with_u8_array(data) {
-            Ok(success) => {
-                self.link.send_message(Msg::LogEvent(format!("Successfully sent the ws message: {:?}", message)))
-            },
-            Err(err) => {
-                self.link.send_message(Msg::LogEvent(format!("There was an error sending the ws message: {:?}", err)))
-            }
+            Ok(success) => self.link.send_message(Msg::LogEvent(format!(
+                "Successfully sent the ws message: {:?}",
+                message
+            ))),
+            Err(err) => self.link.send_message(Msg::LogEvent(format!(
+                "There was an error sending the ws message: {:?}",
+                err
+            ))),
         }
 
         self.websocket = Some(ws);
@@ -176,17 +171,13 @@ self.user_id = Some(client.user_id);
         )
     }
 
-    
     fn show_peers_online(&self, client: &Client) -> Html {
-        
-            let client_clone = client.clone();
-            let client_clone2 = client.clone();
+        let client_clone = client.clone();
+        let client_clone2 = client.clone();
 
-                html!(<li> <button onclick=self.link.callback( move |_| {
+        html!(<li> <button onclick=self.link.callback( move |_| {
                     Msg::MakeSdpRequestToClient(client_clone.user_id.clone())
                 } ) > {format!("{:?} : {:?}", client_clone2.username.clone() , client_clone2.current_socket_addr.clone())} </button> </li>)
-              
-        
     }
 
     fn setup_websocket_object_callbacks(&mut self, ws: WebSocket) -> WebSocket {
@@ -205,37 +196,60 @@ self.user_id = Some(client.user_id);
                         let receiver = result.receiver;
                         let intermediary = result.intermediary;
                         match result.command {
-                            
-                                Command::ServerInitiated(client) => {
-                                    let messages = vec!(Msg::LogEvent(format!("{:?} Connected To Websocket Server!", client)),
+                            Command::Error(error) => {
+                                cloned.send_message(Msg::LogEvent(
+                                    format!(
+                                        "Received the following error: {}",
+                                        error,)
+                                ));
+                            }
+                            Command::ServerInitiated(client) => {
+                                let messages = vec![
+                                    Msg::LogEvent(format!(
+                                        "{:?} Connected To Websocket Server!",
+                                        client
+                                    )),
                                     Msg::SetClient(client.clone()),
                                     Msg::AddState(State::ConnectedToWebsocketServer),
-                                    Msg::RequestUsersOnline(client));
-                                    cloned.send_message_batch(messages);
+                                    Msg::RequestUsersOnline(client),
+                                ];
+                                cloned.send_message_batch(messages);
+                            }
+                            Command::OnlineClients(clients, _round_number) => {
+                                cloned.send_message(Msg::UpdateOnlineUsers(clients))
+                            }
+                            Command::ClientInfo(client) => {
+                                cloned.send_message(Msg::SetClient(client));
+                            }
 
+                            Command::ReadyForPartner(client) => {
+                                cloned.send_message(Msg::ServerSentWsMessage(format!(
+                                    "Ready for partner acknowledged by server"
+                                )));
+                            }
 
-                                }
-                                Command::OnlineClients(clients, _round_number) => {
-                                    cloned.send_message(Msg::UpdateOnlineUsers(clients))
-                                }
-                                Command::ClientInfo(client) => {
-                                    cloned.send_message(Msg::SetClient(client));
-                               
+                            Command::SdpRequest(request) => {
+                                cloned.send_message(Msg::MakeSdpResponse(
+                                    request,
+                                    sender.get_uuid().unwrap(),
+                                ));
+                            }
+                            Command::SdpResponse(response) => {
+                                cloned.send_message(Msg::SdpResponse(response));
+                            }
+                            Command::ClosedConnection(client) => {
+                                cloned.send_message(Msg::ResetPage)
+                            }
+                        }
                     }
-
-
-                                Command::ReadyForPartner(client) => {cloned.send_message(Msg::ServerSentWsMessage(format!("Ready for partner acknowledged by server")));}
-                            
-                        Command::SdpRequest(request) => {cloned.send_message(Msg::MakeSdpResponse(request, sender.get_uuid().unwrap()));}
-                        Command::SdpResponse(response) => {cloned.send_message(Msg::SdpResponse(response));}
-                        Command::ClosedConnection(client) => {cloned.send_message(Msg::ResetPage)}
-                    }}
-                            Err(uhh) => {cloned.send_message(Msg::LogEvent(format!("found an error while receiving a message from the ws server: {}", uhh)));}
+                    Err(uhh) => {
+                        cloned.send_message(Msg::LogEvent(format!(
+                            "found an error while receiving a message from the ws server: {}",
+                            uhh
+                        )));
+                    }
                 };
-               
-             
-                    }
-               
+            }
         }) as Box<dyn FnMut(MessageEvent)>);
         // set message event handler on WebSocket
         ws.set_onmessage(Some(onmessage_callback.as_ref().unchecked_ref()));
@@ -255,9 +269,9 @@ impl Component for Model {
             link,
             websocket: None,
             event_log: Vec::<String>::new(),
-            connection_socket_address : None,
-            user_id : None,
-            username : None,
+            connection_socket_address: None,
+            user_id: None,
+            username: None,
             partner: None,
             peers: HashSet::<Client>::new(),
             states: HashSet::<State>::new(),
@@ -272,36 +286,35 @@ impl Component for Model {
             }
             Msg::MakeSdpRequest(sdp, receiver) => {
                 let envelope = Envelope::new(
-                    EntityDetails::Client(self.user_id.unwrap()), 
+                    EntityDetails::Client(self.user_id.unwrap()),
                     EntityDetails::Client(receiver),
-                     Some(EntityDetails::Server),
-                    Command::SdpRequest(sdp.clone())
-            );
+                    Some(EntityDetails::Server),
+                    Command::SdpRequest(sdp.clone()),
+                );
                 self.link.send_message(Msg::SendWsMessage(envelope));
                 true
             }
             Msg::ResetPage => {
                 self.reset_state();
                 true
-            },
-            Msg::RequestUsersOnline(client)=> {
+            }
+            Msg::RequestUsersOnline(client) => {
                 let envelope = Envelope::new(
                     EntityDetails::Client(client.user_id.clone()),
                     EntityDetails::Server,
                     None,
-                    Command::ReadyForPartner(client.clone())
+                    Command::ReadyForPartner(client.clone()),
                 );
                 self.send_ws_message(envelope);
-                
+
                 true
-            },
+            }
             Msg::SendWsMessage(control_message) => {
                 self.link.send_message(Msg::LogEvent(format!(
                     "Sending Message to server: {:?}",
                     &control_message
                 )));
                 self.send_ws_message(control_message);
-
 
                 true
             }
@@ -348,11 +361,8 @@ impl Component for Model {
                     let ws = self.setup_websocket_object_callbacks(ws);
 
                     self.websocket = Some(ws);
-                    let messages: Vec<Msg> = vec![
-                        Msg::LogEvent("attempting ws connection ...".to_string()),
-                        
-                        
-                    ];
+                    let messages: Vec<Msg> =
+                        vec![Msg::LogEvent("attempting ws connection ...".to_string())];
                     self.link.send_message_batch(messages);
                     true
                 }
@@ -375,19 +385,20 @@ impl Component for Model {
                     EntityDetails::Client(user_id.clone()),
                     EntityDetails::Server,
                     None,
-                    Command::ClientInfo(
-                        Client{
-                            email: None, user_id : user_id.clone(), username : Some(username), current_socket_addr : None
-                        })
+                    Command::ClientInfo(Client {
+                        email: None,
+                        user_id: user_id.clone(),
+                        username: Some(username),
+                        current_socket_addr: None,
+                    }),
+                );
 
-                    );
-            
                 self.send_ws_message(envelope);
                 true
             }
             Msg::UpdateOnlineUsers(clients) => {
                 let mut clients = clients.clone();
-                
+
                 match self.user_id {
                     Some(this_user) => {
                         clients.remove(&Client::from_user_id(this_user));
@@ -400,29 +411,36 @@ impl Component for Model {
 
                 true
             }
-            Msg::ReceivedIceCandidate(_) => {false}
-            Msg::SendIceCandidate(_) => {false}
-            Msg::MakeSdpRequestToClient(receiver ) => {
+            Msg::ReceivedIceCandidate(_) => false,
+            Msg::SendIceCandidate(_) => false,
+            Msg::MakeSdpRequestToClient(receiver) => {
                 // let sender_lookup = Client::from_user_id(user_id);
 
                 let sender = self.user_id.unwrap().clone();
 
+                let sdp_request = format!("sdp_request...");
+
                 let envelope = Envelope::new(
-                    EntityDetails::Client(sender), 
-                    EntityDetails::Client(receiver), 
-                    None, 
-                    command)
+                    EntityDetails::Client(sender),
+                    EntityDetails::Client(receiver),
+                    Some(EntityDetails::Server),
+                    Command::SdpRequest(sdp_request),
+                );
 
-            
-                let messages : Vec<Msg> = vec![Msg::LogEvent(format!("Need to make Sdp Request for {:?}", &receiver)),
-                Msg::MakeSdpRequest(format!("sdpRequest"), MessageDirection::ClientToClient(InformationFlow{sender, receiver}))
-                ];
+                // let messages : Vec<Msg> = vec![Msg::LogEvent(format!("Need to make Sdp Request for {:?}", &receiver)),
+                // Msg::MakeSdpRequest(format!("sdpRequest"), MessageDirection::ClientToClient(InformationFlow{sender, receiver}))
+                // ];
 
-                self.link.send_message_batch(messages);
+                // self.link.send_message_batch(messages);
+
+                self.send_ws_message(envelope);
                 true
             }
-            Msg::SdpResponse(_) => {false}
-            Msg::ReceiveSdpRequest(_) => {}
+            Msg::SdpResponse(_) => false,
+            //Msg::ReceiveSdpRequest(_) => {false}
+            Msg::MakeSdpResponse(sdp, client) => {
+                self.link.send_message(Msg::LogEvent(format!("Received the following sdp request: {:?} from client {:?}", sdp, client)));
+                true},
         }
     }
 
@@ -431,22 +449,21 @@ impl Component for Model {
     }
 
     fn view(&self) -> Html {
-        
         html! {
             <div>
 
 
                 {
-                    
+
                     self.show_welcome_message()}
-                
-                
+
+
                 {if (self.event_log.len() > 5 ){ html!(<button onclick=self.link.callback(|_| {Msg::ClearLog})> {"Clear the event log."} </button> )} else {html!(<></>)}  }
                 <div>
 
                 {if (self.event_log.len() > 1 ){ html!(<p> {format!("The following details the event log of the application:")} </p> )} else {html!(<></>)}  }
 
-                
+
                 {self.show_events_in_table() }
                 </div>
 
@@ -469,9 +486,9 @@ impl Component for Model {
                                 for self.peers.iter().map(|client| {
                                     if client != &Client::from_user_id(self.user_id.unwrap()){
                                 self.show_peers_online(client)} else {html!(<></>)}
-                                
+
                             })
-                            
+
                             }
                             </div>
                                 )
