@@ -1,4 +1,4 @@
-#![recursion_limit = "1016"]
+#![recursion_limit = "1024"]
 
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
@@ -131,11 +131,10 @@ impl Model {
                 //Username IS set!
                 html!(
                     <div>
-                    //, self.client.clone().unwrap().username.unwrap()
+
                     {format!("Welcome {}", self.username.as_ref().unwrap())}
 
                     </div>
-
                 )
             }
         }
@@ -414,7 +413,6 @@ impl Component for Model {
             Msg::ReceivedIceCandidate(_) => false,
             Msg::SendIceCandidate(_) => false,
             Msg::MakeSdpRequestToClient(receiver) => {
-                // let sender_lookup = Client::from_user_id(user_id);
 
                 let sender = self.user_id.unwrap().clone();
 
@@ -427,17 +425,10 @@ impl Component for Model {
                     Command::SdpRequest(sdp_request),
                 );
 
-                // let messages : Vec<Msg> = vec![Msg::LogEvent(format!("Need to make Sdp Request for {:?}", &receiver)),
-                // Msg::MakeSdpRequest(format!("sdpRequest"), MessageDirection::ClientToClient(InformationFlow{sender, receiver}))
-                // ];
-
-                // self.link.send_message_batch(messages);
-
                 self.send_ws_message(envelope);
                 true
             }
             Msg::SdpResponse(_) => false,
-            //Msg::ReceiveSdpRequest(_) => {false}
             Msg::MakeSdpResponse(sdp, client) => {
                 self.link.send_message(Msg::LogEvent(format!("Received the following sdp request: {:?} from client {:?}", sdp, client)));
                 true},
