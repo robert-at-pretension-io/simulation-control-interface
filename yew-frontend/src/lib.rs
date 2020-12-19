@@ -1,5 +1,4 @@
 #![recursion_limit = "1024"]
-
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
 

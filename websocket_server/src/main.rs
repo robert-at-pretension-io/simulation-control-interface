@@ -5,6 +5,8 @@ use tokio::{
     sync::mpsc::Receiver,
 };
 
+//sad non-productive noises
+
 use tokio::time;
 
 use futures_util::SinkExt;
@@ -346,7 +348,7 @@ async fn server_global_state_manager(
                                             client_channel.send(first_clone.clone()).await.unwrap();
                                         }
                                         None => {
-                                            info!("This is bad...");
+                                            info!("This is bad...Need to make custom error messages. I think messages could have statuses too...");
 
                                             panic!("At the disco");
                                         }
