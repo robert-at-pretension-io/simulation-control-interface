@@ -27,6 +27,8 @@ use web_sys::{
     RtcSessionDescriptionInit,
 };
 
+
+
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 enum State {
     ConnectedToWebsocketServer,
@@ -45,6 +47,7 @@ struct Model {
     websocket: Option<WebSocket>,
     peers: HashSet<Client>,
     states: HashSet<State>,
+
 }
 
 impl Model {
@@ -60,18 +63,20 @@ impl Model {
 }
 #[derive(Debug, Clone)]
 enum Msg {
+    RtcClientReady(RtcPeerConnection),
     UpdateUsername(String),
     SetClient(Client),
     ClearLog,
+    ResetPage,
+    
     ReceivedIceCandidate(String),
     SendIceCandidate(String),
+    
     MakeSdpRequest(String, uuid::Uuid),
     MakeSdpResponse(String, uuid::Uuid),
 
-    /// The string will indicate the client user_id field
     MakeSdpRequestToClient(Uuid),
     SdpResponse(String),
-    ResetPage,
     InitiateWebsocketConnectionProcess,
     LogEvent(String),
     ServerSentWsMessage(String),
@@ -255,6 +260,28 @@ impl Model {
         onmessage_callback.forget();
 
         ws
+    }
+
+
+    fn create_local_rtc_peer(&mut self) -> Msg {
+        let cloned_link = self.link.clone();
+
+        let onicecandidate_callback =
+        Closure::wrap(
+            Box::new(move |ev: RtcPeerConnectionIceEvent| match ev.candidate() {
+                Some(candidate) => {
+                    cloned_link.send_message(Msg::LogEvent(format!("This client made an ice candidate: {:#?}", candidate.candidate())));
+                    cloned_link.send_message(Msg::)
+                    let _ =
+                        pc1_clone.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate));
+                }
+                None => {}
+            }) as Box<dyn FnMut(RtcPeerConnectionIceEvent)>,
+        );
+
+        let client = RtcPeerConnection::new().unwrap();
+        client.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
+        Msg::RtcClientReady(client)
     }
 }
 
