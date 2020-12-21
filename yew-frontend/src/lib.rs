@@ -47,7 +47,8 @@ struct Model {
     websocket: Option<WebSocket>,
     peers: HashSet<Client>,
     states: HashSet<State>,
-
+    local_ice_candidate : Vec<String>,
+    local_web_rtc_connection : Option<RtcPeerConnection>,
 }
 
 impl Model {
@@ -71,6 +72,7 @@ enum Msg {
     
     ReceivedIceCandidate(String),
     SendIceCandidate(String),
+    AddLocalIceCandidate(String),
     
     MakeSdpRequest(String, uuid::Uuid),
     MakeSdpResponse(String, uuid::Uuid),
@@ -271,9 +273,8 @@ impl Model {
             Box::new(move |ev: RtcPeerConnectionIceEvent| match ev.candidate() {
                 Some(candidate) => {
                     cloned_link.send_message(Msg::LogEvent(format!("This client made an ice candidate: {:#?}", candidate.candidate())));
-                    cloned_link.send_message(Msg::)
-                    let _ =
-                        pc1_clone.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate));
+                    cloned_link.send_message(Msg::AddLocalIceCandidate(candidate.candidate()))
+                    
                 }
                 None => {}
             }) as Box<dyn FnMut(RtcPeerConnectionIceEvent)>,
@@ -291,8 +292,10 @@ impl Component for Model {
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         Model {
+            local_web_rtc_connection: None,
             link,
             websocket: None,
+            local_ice_candidate: Vec::<String>::new(),
             event_log: Vec::<String>::new(),
             connection_socket_address: None,
             user_id: None,
@@ -305,9 +308,18 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::AddLocalIceCandidate(candidate) => {
+                self.local_ice_candidate.push(candidate.clone());
+                self.link.send_message(Msg::LogEvent(format!("need to send ice candidate {} to partner...", candidate)));
+                true
+            }
             Msg::ClearLog => {
                 self.event_log = Vec::<String>::new();
                 true
+            }
+            Msg::RtcClientReady(client) => {
+                self.local_web_rtc_connection = Some(client);
+                false
             }
             Msg::MakeSdpRequest(sdp, receiver) => {
                 let envelope = Envelope::new(
