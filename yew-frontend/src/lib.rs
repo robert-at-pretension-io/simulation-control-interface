@@ -21,7 +21,7 @@ use std::collections::HashSet;
 // all of these are for webrtc
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
-use wasm_bindgen_futures::JsFuture;
+use wasm_bindgen_futures::{JsFuture, spawn_local};
 use web_sys::{
     RtcDataChannelEvent, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
     RtcSessionDescriptionInit,
@@ -64,6 +64,7 @@ impl Model {
 }
 #[derive(Debug, Clone)]
 enum Msg {
+    SetupWebRtc(),
     RtcClientReady(RtcPeerConnection),
     UpdateUsername(String),
     SetClient(Client),
@@ -74,11 +75,12 @@ enum Msg {
     SendIceCandidate(String),
     AddLocalIceCandidate(String),
     
-    MakeSdpRequest(String, uuid::Uuid),
     MakeSdpResponse(String, uuid::Uuid),
-
+    SendSdpRequestToClient(Uuid, String),
     MakeSdpRequestToClient(Uuid),
     SdpResponse(String),
+
+
     InitiateWebsocketConnectionProcess,
     LogEvent(String),
     ServerSentWsMessage(String),
@@ -216,6 +218,7 @@ impl Model {
                                     )),
                                     Msg::SetClient(client.clone()),
                                     Msg::AddState(State::ConnectedToWebsocketServer),
+                                    Msg::SetupWebRtc(),
                                     Msg::RequestUsersOnline(client),
                                 ];
                                 cloned.send_message_batch(messages);
@@ -265,7 +268,7 @@ impl Model {
     }
 
 
-    fn create_local_rtc_peer(&mut self) -> Msg {
+    fn create_local_rtc_peer(&mut self)  {
         let cloned_link = self.link.clone();
 
         let onicecandidate_callback =
@@ -282,8 +285,28 @@ impl Model {
 
         let client = RtcPeerConnection::new().unwrap();
         client.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
-        Msg::RtcClientReady(client)
+
+        onicecandidate_callback.forget();
+
+        self.link.send_message(Msg::RtcClientReady(client));
     }
+
+
+
+}
+
+
+async fn create_webrtc_offer(link: ComponentLink<Model>, receiver : uuid::Uuid,  local : RtcPeerConnection) {
+    let offer = JsFuture::from(local.create_offer()).await.unwrap();
+    
+unsafe {    let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp")).unwrap()
+        .as_string()
+        .unwrap();
+    
+        link.send_message(Msg::SendSdpRequestToClient(receiver, offer_sdp));
+    
+    }
+    
 }
 
 impl Component for Model {
@@ -308,6 +331,11 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::SetupWebRtc() => {
+                self.link.send_message(Msg::LogEvent(format!("Setting up webRTC locally...")));
+                self.create_local_rtc_peer();
+            true
+            },
             Msg::AddLocalIceCandidate(candidate) => {
                 self.local_ice_candidate.push(candidate.clone());
                 self.link.send_message(Msg::LogEvent(format!("need to send ice candidate {} to partner...", candidate)));
@@ -319,18 +347,20 @@ impl Component for Model {
             }
             Msg::RtcClientReady(client) => {
                 self.local_web_rtc_connection = Some(client);
+                self.link.send_message(Msg::LogEvent(format!("local WebRTC successfully set! Able to send sdp objects to clients now!")));
                 false
             }
-            Msg::MakeSdpRequest(sdp, receiver) => {
-                let envelope = Envelope::new(
-                    EntityDetails::Client(self.user_id.unwrap()),
-                    EntityDetails::Client(receiver),
-                    Some(EntityDetails::Server),
-                    Command::SdpRequest(sdp.clone()),
-                );
-                self.link.send_message(Msg::SendWsMessage(envelope));
-                true
-            }
+            // Msg::MakeSdpRequest(sdp, receiver) => {
+                
+            //     let envelope = Envelope::new(
+            //         EntityDetails::Client(self.user_id.unwrap()),
+            //         EntityDetails::Client(receiver),
+            //         Some(EntityDetails::Server),
+            //         Command::SdpRequest(sdp.clone()),
+            //     );
+            //     self.link.send_message(Msg::SendWsMessage(envelope));
+            //     true
+            // }
             Msg::ResetPage => {
                 self.reset_state();
                 true
@@ -382,7 +412,7 @@ impl Component for Model {
                 }
                 false => {
                     self.link.send_message(Msg::LogEvent(format!("Tried removing the following state: {:?}. But it wasn't in the current set of states.", state)));
-                    false
+                    true
                 }
             },
             Msg::LogEvent(event) => {
@@ -454,18 +484,32 @@ impl Component for Model {
 
                 let sender = self.user_id.unwrap().clone();
 
-                let sdp_request = format!("sdp_request...");
+                let local = self.local_web_rtc_connection.clone().unwrap();
+
+                let link = self.link.clone();
+
+
+                spawn_local(async move {create_webrtc_offer(link, receiver.clone(), local).await});
+
+
+                true
+            }
+            Msg::SendSdpRequestToClient(receiver, sdp) => {
+
+                let sender = self.user_id.clone().unwrap();
+
 
                 let envelope = Envelope::new(
                     EntityDetails::Client(sender),
                     EntityDetails::Client(receiver),
                     Some(EntityDetails::Server),
-                    Command::SdpRequest(sdp_request),
+                    Command::SdpRequest(sdp),
                 );
 
                 self.send_ws_message(envelope);
                 true
             }
+
             Msg::SdpResponse(_) => false,
             Msg::MakeSdpResponse(sdp, client) => {
                 self.link.send_message(Msg::LogEvent(format!("Received the following sdp request: {:?} from client {:?}", sdp, client)));
