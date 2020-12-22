@@ -74,6 +74,7 @@ enum Msg {
     ReceivedIceCandidate(String),
     SendIceCandidate(String),
     AddLocalIceCandidate(String),
+    SetLocalWebRtcOffer(String),
     
     MakeSdpResponse(String, uuid::Uuid),
     SendSdpRequestToClient(Uuid, String),
@@ -309,6 +310,15 @@ unsafe {    let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp")).unwr
     
 }
 
+async fn set_local_webrtc_offer(offer_sdp: String, link: ComponentLink<Model>,  local : RtcPeerConnection) {
+
+    let mut offer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
+    offer_obj.sdp(&offer_sdp);
+    let sld_promise = local.set_local_description(&offer_obj);
+    JsFuture::from(sld_promise).await.unwrap();
+
+}
+
 impl Component for Model {
     type Message = Msg;
     type Properties = ();
@@ -480,9 +490,16 @@ impl Component for Model {
             }
             Msg::ReceivedIceCandidate(_) => false,
             Msg::SendIceCandidate(_) => false,
+            Msg::SetLocalWebRtcOffer(offer) => {
+                let local = self.local_web_rtc_connection.clone().unwrap();
+
+                let link = self.link.clone();
+
+                spawn_local(async move {set_local_webrtc_offer(offer, link,  local).await});
+                
+            }
             Msg::MakeSdpRequestToClient(receiver) => {
 
-                let sender = self.user_id.unwrap().clone();
 
                 let local = self.local_web_rtc_connection.clone().unwrap();
 
