@@ -75,11 +75,13 @@ enum Msg {
     SendIceCandidate(String),
     AddLocalIceCandidate(String),
     SetLocalWebRtcOffer(String),
-    
+
     MakeSdpResponse(String, uuid::Uuid),
     SendSdpRequestToClient(Uuid, String),
     MakeSdpRequestToClient(Uuid),
-    SdpResponse(String),
+    SendSdpResponse(uuid::Uuid, String),
+    ReceiveSdpReponse(uuid::Uuid, String),
+    OverrideRtcPeer(RtcPeerConnection),
 
 
     InitiateWebsocketConnectionProcess,
@@ -244,7 +246,8 @@ impl Model {
                                 ));
                             }
                             Command::SdpResponse(response) => {
-                                cloned.send_message(Msg::SdpResponse(response));
+        
+                                cloned.send_message(Msg::ReceiveSdpReponse(receiver.get_uuid().unwrap(), response));
                             }
                             Command::ClosedConnection(client) => {
                                 cloned.send_message(Msg::ResetPage)
@@ -310,12 +313,38 @@ unsafe {    let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp")).unwr
     
 }
 
-async fn set_local_webrtc_offer(offer_sdp: String, link: ComponentLink<Model>,  local : RtcPeerConnection) {
+
+async fn set_remote_webrtc_offer(sdp : String, receiver : uuid::Uuid, local : RtcPeerConnection, link: ComponentLink<Model>,) {
+    let mut offer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
+    offer_obj.sdp(&sdp);
+    let srd_promise = local.set_remote_description(&offer_obj);
+    match JsFuture::from(srd_promise).await {
+        Ok(_) => {
+            link.send_message(Msg::LogEvent(format!("Successfully set the remote webrtc offer!")));
+            link.send_message(Msg::SendSdpResponse(receiver, sdp.clone()));
+        },
+        Err(err) => {link.send_message(Msg::LogEvent(format!("Error: {:?}", err)))}
+    }
+}
+
+async fn create_and_set_answer_locally() {
+    
+}
+
+async fn set_local_webrtc_offer(offer_sdp: String, link: ComponentLink<Model>,  local : RtcPeerConnection)  {
+
+    
 
     let mut offer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
     offer_obj.sdp(&offer_sdp);
     let sld_promise = local.set_local_description(&offer_obj);
-    JsFuture::from(sld_promise).await.unwrap();
+    match JsFuture::from(sld_promise).await
+    {
+        Ok(_) => {link.send_message(Msg::OverrideRtcPeer(local))},
+        Err(err) => {link.send_message(Msg::LogEvent(format!("Got the following Error: {:?}", err)))}
+    }
+
+
 
 }
 
@@ -341,6 +370,11 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::OverrideRtcPeer(local) => {
+                self.link.send_message(Msg::LogEvent(format!("override the old WebRtcConnection")));
+                self.local_web_rtc_connection = Some(local);
+                true
+            }
             Msg::SetupWebRtc() => {
                 self.link.send_message(Msg::LogEvent(format!("Setting up webRTC locally...")));
                 self.create_local_rtc_peer();
@@ -360,17 +394,6 @@ impl Component for Model {
                 self.link.send_message(Msg::LogEvent(format!("local WebRTC successfully set! Able to send sdp objects to clients now!")));
                 false
             }
-            // Msg::MakeSdpRequest(sdp, receiver) => {
-                
-            //     let envelope = Envelope::new(
-            //         EntityDetails::Client(self.user_id.unwrap()),
-            //         EntityDetails::Client(receiver),
-            //         Some(EntityDetails::Server),
-            //         Command::SdpRequest(sdp.clone()),
-            //     );
-            //     self.link.send_message(Msg::SendWsMessage(envelope));
-            //     true
-            // }
             Msg::ResetPage => {
                 self.reset_state();
                 true
@@ -493,11 +516,13 @@ impl Component for Model {
             Msg::SetLocalWebRtcOffer(offer) => {
                 let local = self.local_web_rtc_connection.clone().unwrap();
 
+                self.link.send_message(Msg::LogEvent(format!("Set the local webRTC offer.")));
                 let link = self.link.clone();
 
                 spawn_local(async move {set_local_webrtc_offer(offer, link,  local).await});
-                
-            }
+
+                true
+            }   
             Msg::MakeSdpRequestToClient(receiver) => {
 
 
@@ -515,6 +540,7 @@ impl Component for Model {
 
                 let sender = self.user_id.clone().unwrap();
 
+                self.link.send_message(Msg::SetLocalWebRtcOffer(sdp.clone()));
 
                 let envelope = Envelope::new(
                     EntityDetails::Client(sender),
@@ -527,9 +553,45 @@ impl Component for Model {
                 true
             }
 
-            Msg::SdpResponse(_) => false,
+            Msg::SendSdpResponse(client, sdp_response) => {
+                
+                self.link.send_message(Msg::LogEvent(format!("Sending sdp response {:?} back to other client", sdp_response.clone())));
+
+                let sender = self.user_id.clone().unwrap();
+                let receiver = client.clone();
+
+                let envelope = Envelope::new(
+                    EntityDetails::Client(sender),
+                    EntityDetails::Client(receiver),
+                    Some(EntityDetails::Server),
+                    Command::SdpResponse(sdp_response),
+                );
+
+                self.send_ws_message(envelope);
+                
+                false},
+
+            Msg::ReceiveSdpReponse(sender, sdp) => {
+                self.link.send_message(Msg::LogEvent(format!("Received the following sdp reponse: {:?} from client {:?}", sdp.clone(), sender.clone())));
+
+
+
+                true
+            },
             Msg::MakeSdpResponse(sdp, client) => {
                 self.link.send_message(Msg::LogEvent(format!("Received the following sdp request: {:?} from client {:?}", sdp, client)));
+
+                let sdp = sdp.clone();
+                let client = client.clone();
+
+                let local = self.local_web_rtc_connection.clone().unwrap();
+                let link = self.link.clone();
+
+                spawn_local(async move {
+                    set_remote_webrtc_offer(sdp, client, local, link).await
+
+                });
+
                 true},
         }
     }
