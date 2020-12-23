@@ -166,7 +166,6 @@ async fn establish_and_maintain_each_client_ws_connection(
     }
 }
 
-
 #[instrument]
 async fn send_command_to_client_by_uuid(
     client: uuid::Uuid,
@@ -362,7 +361,7 @@ async fn server_global_state_manager(
                         else {
                             // if let  EntityDetails::Client(uuid) = control_message.receiver.entity_detail{
                             //     let (_client, connection) = online_connections.get_mut(&uuid).unwrap();
-                            // } 
+                            // }
 
                             info!("When passing messages for the server, be sure to make sure that the server is either the receiver or the intermediary...");
                             info!("The following was received by the server but not addressed to the server: {:?}", first_clone);
