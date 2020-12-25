@@ -2,8 +2,6 @@
 use uuid::Uuid;
 use wasm_bindgen::prelude::*;
 
-//Each of the javascript api features must be added in both the YAML file and used here
-use web_sys::{MessageEvent, WebSocket, get_user_media};
 
 // Needed for converting boxed closures into js closures *🤷*
 use wasm_bindgen::JsCast;
@@ -12,7 +10,7 @@ use wasm_bindgen::JsCast;
 use yew::prelude::*;
 
 // This local trait is for shared objects between the frontend and the backend
-use models::{Client, Command, Entity, EntityDetails, Envelope};
+use models::{Client, Command, EntityDetails, Envelope};
 
 use std::net::SocketAddr;
 
@@ -22,10 +20,7 @@ use std::collections::HashSet;
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{
-    RtcDataChannelEvent, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
-    RtcSessionDescriptionInit, MediaDevices, Navigator, Window
-};
+use web_sys::{MediaDevices, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit, WebSocket, Window, MediaStreamConstraints, RtcConfiguration};
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 enum State {
@@ -74,6 +69,8 @@ enum Msg {
     SendIceCandidate(String),
     AddLocalIceCandidate(String),
     SetLocalWebRtcOffer(String),
+
+    SetLocalMedia,
 
     MakeSdpResponse(String, uuid::Uuid),
     SendSdpRequestToClient(Uuid, String),
@@ -275,12 +272,20 @@ impl Model {
         )
             as Box<dyn FnMut(RtcPeerConnectionIceEvent)>);
 
-        let client = RtcPeerConnection::new().unwrap();
-        client.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
+        let mut config = RtcConfiguration::new();
+        let config = config.ice_servers(&JsValue::from_str("[stun.l.google.com:19302]"));
+        let client = RtcPeerConnection::new_with_configuration(&config);
+        match client.clone() {
+            Ok(client) => {          
+                client.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
 
-        onicecandidate_callback.forget();
+                onicecandidate_callback.forget();
+        
+                self.link.send_message(Msg::RtcClientReady(client));}
+                Err(err) => {self.link.send_message(Msg::LogEvent(format!("Received the following error: {:?}", err)))}
 
-        self.link.send_message(Msg::RtcClientReady(client));
+        }
+ 
     }
 }
 
@@ -291,10 +296,14 @@ async fn get_local_user_media(
     let window = web_sys::window().unwrap();
     
     let media_devices : MediaDevices = window.navigator().media_devices().unwrap();
+
+    let mut constraints = MediaStreamConstraints::new();
+    let constraints = constraints.audio(&JsValue::from_bool(true)).video(&JsValue::from_bool(true));
    
-    match JsFuture::from(media_devices.get_user_media().unwrap()).await {
+    match JsFuture::from(media_devices.get_user_media_with_constraints(&constraints).unwrap()).await {
         Ok(a) => {
             link.send_message(Msg::LogEvent(format!("Alright, able to get user media... should probably do something with it now!")));
+            // probably should reset the peer client here... attach the media or something!
         },
         Err(err) => {link.send_message(Msg::LogEvent(format!("Error with getting user media: {:?}", err)))}
     }
@@ -458,7 +467,16 @@ impl Component for Model {
                 self.link.send_message(Msg::LogEvent(format!(
                     "local WebRTC successfully set! Able to send sdp objects to clients now!"
                 )));
+                self.link.send_message(Msg::SetLocalMedia);
                 false
+            }
+            Msg::SetLocalMedia => {
+                let link = self.link.clone();
+                let local = self.local_web_rtc_connection.clone().unwrap();
+                spawn_local(async move {
+                    get_local_user_media(link, local).await;
+                });
+                true
             }
             Msg::ResetPage => {
                 self.reset_state();

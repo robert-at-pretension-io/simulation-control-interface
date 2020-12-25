@@ -184,6 +184,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                     }
                     Err(err) => {
                         info!("Received the following error trying to send the message: {:?}", err);
+                        break
                     }
                 }
 
