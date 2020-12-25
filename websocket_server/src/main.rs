@@ -164,7 +164,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                     match tx_server_state_manager
                         .send((envelope,None))
                         .await {
-                            Ok(_) => {info!("successfully closed/removed the connection!")},
+                            Ok(_) => {info!("successfully closed/removed the connection!"); break},
                             Err(err) => {info!("Had the following error while trying to send a ClosedConnection command to the tx_server_state_manager:\n {:?}", err);}
                         }
         
