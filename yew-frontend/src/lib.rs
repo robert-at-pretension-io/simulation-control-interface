@@ -3,7 +3,7 @@ use uuid::Uuid;
 use wasm_bindgen::prelude::*;
 
 //Each of the javascript api features must be added in both the YAML file and used here
-use web_sys::{MessageEvent, WebSocket};
+use web_sys::{MessageEvent, WebSocket, get_user_media};
 
 // Needed for converting boxed closures into js closures *🤷*
 use wasm_bindgen::JsCast;
@@ -24,7 +24,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{
     RtcDataChannelEvent, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
-    RtcSessionDescriptionInit,
+    RtcSessionDescriptionInit, MediaDevices, Navigator, Window
 };
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
@@ -62,13 +62,14 @@ impl Model {
 }
 #[derive(Debug, Clone)]
 enum Msg {
-    SetupWebRtc(),
-    RtcClientReady(RtcPeerConnection),
     UpdateUsername(String),
     SetClient(Client),
     ClearLog,
     ResetPage,
+    LogEvent(String),
 
+    SetupWebRtc(),
+    RtcClientReady(RtcPeerConnection),
     ReceivedIceCandidate(String),
     SendIceCandidate(String),
     AddLocalIceCandidate(String),
@@ -82,7 +83,6 @@ enum Msg {
     OverrideRtcPeer(RtcPeerConnection),
 
     InitiateWebsocketConnectionProcess,
-    LogEvent(String),
     ServerSentWsMessage(String),
     UpdateOnlineUsers(HashSet<Client>),
     AddState(State),
@@ -282,6 +282,24 @@ impl Model {
 
         self.link.send_message(Msg::RtcClientReady(client));
     }
+}
+
+async fn get_local_user_media(
+    link: ComponentLink<Model>,
+    local: RtcPeerConnection,
+) {
+    let window = web_sys::window().unwrap();
+    
+    let media_devices : MediaDevices = window.navigator().media_devices().unwrap();
+   
+    match JsFuture::from(media_devices.get_user_media().unwrap()).await {
+        Ok(a) => {
+            link.send_message(Msg::LogEvent(format!("Alright, able to get user media... should probably do something with it now!")));
+        },
+        Err(err) => {link.send_message(Msg::LogEvent(format!("Error with getting user media: {:?}", err)))}
+    }
+
+
 }
 
 async fn create_webrtc_offer(

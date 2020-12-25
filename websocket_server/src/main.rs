@@ -5,7 +5,6 @@ use tokio::{
     sync::mpsc::Receiver,
 };
 
-//sad non-productive noises
 
 use tokio::time;
 
@@ -30,20 +29,26 @@ async fn send_message(stream: &mut WebSocketStream<TcpStream>, message: tungsten
                 "Sending BINARY Message From Server To Client : {:?}",
                 &message
             );
-            stream
-                .send(tungstenite::Message::Binary(message))
-                .await
-                .unwrap();
+            match stream
+                .send(tungstenite::Message::Binary(message.clone()))
+                .await {
+                    Ok(_) => info!("sent message!"),
+                    Err(err) => info!("Have error trying to send this message: {:?} \n... error: {:?}", message, err)
+                }
+                
         }
         tungstenite::Message::Text(message) => {
             info!(
                 "Sending TEXT Message From Server To Client : {:?}",
                 &message
             );
-            stream
-                .send(tungstenite::Message::Text(message))
+            match stream
+                .send(tungstenite::Message::Text(message.clone()))
                 .await
-                .unwrap();
+                {
+                    Ok(_) => info!("sent message!"),
+                    Err(err) => info!("Have error trying to send this message: {:?} \n... error: {:?}", message, err)
+                }
         }
         tungstenite::Message::Close(_)
         | tungstenite::Message::Ping(_)
@@ -62,11 +67,17 @@ async fn establish_and_maintain_each_client_ws_connection(
     let (goes_to_specific_ws_client_tx, mut goes_to_specific_ws_client_rx) =
         mpsc::channel::<Envelope>(10);
 
+        let mut address : Option<std::net::SocketAddr> = None;
+    match stream.peer_addr() {
+        Ok(add) => {address = Some(add)},
+        Err(err) => info!("Couldn't unwrap the stream's ip address :[")
+    }
+
     let this_client = Client {
         username: None,
         email: None,
         user_id: uuid::Uuid::new_v4(),
-        current_socket_addr: Some(stream.peer_addr().unwrap()),
+        current_socket_addr: address,
     };
 
     let envelope = Envelope::new(
@@ -110,53 +121,72 @@ async fn establish_and_maintain_each_client_ws_connection(
         tokio::select! {
 
             control_message = goes_to_specific_ws_client_rx.next() => {
-            if control_message.is_some() {
+            match control_message {
+                Some(control_message) => {
+                    match ws_stream.send(tungstenite::Message::Binary(control_message.serialize())).await {
+                        Ok(great) => {info!("successfully received the control message!")},
+                        Err(err) => {info!("Couldn't send the message properly")}
+                    }
+                }
+                None => {
 
-                ws_stream.send(tungstenite::Message::Binary(control_message.unwrap().serialize())).await.unwrap();
+                }
 
             }
+
+                
+
+            
             },
             // This is the interface for incoming messages from the client to the server... Errors can be dealt with here before sending the message off to the server global state manager
             val = ws_stream.try_next() => {
-                let val = val.unwrap();
-
-                if let Some(value) = val {
-                    match value {
-                        Message::Text(text) => {info!("received text: {:?}", text);},
-                        Message::Binary(bin) => {
-                            match Envelope::deserialize(&bin) {
-                                Ok(control_message) => {
-                                    tx_server_state_manager.send((control_message, None)).await.unwrap();
-                                },
-                                Err(oh_boy) => {info!("Error receiving message from ws client: {:?}", oh_boy)}
+                match val {
+                    Ok(value) => {
+                        match value.unwrap() {
+                            Message::Text(text) => {info!("received text: {:?}", text);},
+                            Message::Binary(bin) => {
+                                match Envelope::deserialize(&bin) {
+                                    Ok(control_message) => {
+                                        match tx_server_state_manager.send((control_message, None)).await
+                                        {
+                                            Ok(_) => {},
+                                            Err(err) => {info!("Received the following error: {:?}", err)}
+                                    
+                                        }
+                                    },
+                                    Err(oh_boy) => {info!("Error receiving message from ws client: {:?}", oh_boy)}
+                                }
+                            },
+                            Message::Close(reason) => {
+                info!("The client is trying to close the connection for the following reason: {:?}", reason);
+    
+                let envelope = Envelope::new(
+                    EntityDetails::Client(this_client.user_id.clone()),
+                    EntityDetails::Server,
+                    None,
+                    Command::ClosedConnection(this_client.clone())
+                );
+    
+                tx_server_state_manager
+                    .send((envelope,None))
+                    .await
+                    .expect("The connection was closed :[");
+                    break // gets out of the loop... should deallocate everything?
+    
+    
                             }
-                        },
-                        Message::Close(reason) => {
-            info!("The client is trying to close the connection for the following reason: {:?}", reason);
-
-            let envelope = Envelope::new(
-                EntityDetails::Client(this_client.user_id.clone()),
-                EntityDetails::Server,
-                None,
-                Command::ClosedConnection(this_client.clone())
-            );
-
-            tx_server_state_manager
-                .send((envelope,None))
-                .await
-                .expect("The connection was closed :[");
-                break // gets out of the loop... should deallocate everything?
-
-
+                            Message::Ping(_)  => {
+                                info!("ping message received")
+                            }
+                            Message::Pong(_) => {
+                                info!("pong message received")
+                            }
                         }
-                        Message::Ping(_)  => {
-                            info!("ping message received")
-                        }
-                        Message::Pong(_) => {
-                            info!("pong message received")
-                        }
+    
                     }
-
+                    Err(err) => {
+                        info!("Received the following error trying to send the message: {:?}", err);
+                    }
                 }
 
 
@@ -180,8 +210,15 @@ async fn send_command_to_client_by_uuid(
         command,
     );
 
-    let (_client, connection_channel) = online_connections.get_mut(&client).unwrap();
-    connection_channel.clone().send(envelope).await.unwrap();
+    let (_client, connection_channel) = online_connections.get_mut(&client).expect("couldn't find client in online connections");
+    
+    
+    match connection_channel.clone().send(envelope).await
+    {
+        Ok(_) => {},
+        Err(err) => {info!("Received the following error: {:?}", err)}
+
+    }
 }
 
 #[instrument]
@@ -217,16 +254,20 @@ async fn server_global_state_manager(
     loop {
         tokio::select! {
 
+
                     game_notifier = status_processer_notifier_rx.next() => {
-                        if game_notifier.is_some() {
-                            current_round = game_notifier.unwrap();
-                            println!("The new round is starting!! {} ", game_notifier.unwrap());
+                        
+                        match game_notifier {
+                            Some(current_round) => {
+                                info!("The new round is starting!! {} ", current_round);
+                            }
+                            None => {info!("none...");}
                         }
 
                     },
 
                     some_connection = global_state_update_transceiver.recv() => {
-                        let (control_message, client_controller_channel) = some_connection.unwrap();
+                        if let Some((control_message, client_controller_channel) ) = some_connection {
 
                     info!("Received connection in status_manager");
                     let first_clone = control_message.clone();
@@ -247,7 +288,7 @@ async fn server_global_state_manager(
                         }
                         Command::ServerInitiated(client) => {
 
-                            let mut client_connection = client_controller_channel.unwrap();
+                            if let Some(mut client_connection) = client_controller_channel {
 
                             let envelope = Envelope::new(
                                 EntityDetails::Server,
@@ -256,7 +297,12 @@ async fn server_global_state_manager(
                                 Command::ClientInfo(client.clone())
                             );
 
-                            client_connection.send(envelope).await.unwrap();
+                            match client_connection.send(envelope).await
+                            {
+                                Ok(_) => {},
+                                Err(err) => {info!("Received the following error: {:?}", err)}
+                        
+                            }
                             let client_id = client.user_id;
 
                             online_connections.insert(client_id, (client, client_connection));
@@ -271,6 +317,7 @@ async fn server_global_state_manager(
                                 let clients = clients.clone();
                                 send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
                             }
+                            }
 
                         }
                         Command::ClientInfo(client) => {
@@ -278,7 +325,12 @@ async fn server_global_state_manager(
                                     info!("received the following updated client info: {:?}", client);
                                     match online_connections.get_mut(&client.user_id) {
                                         Some((old_client, client_connection)) => {
-                                            old_client.replace_with_newer_values(client).unwrap()
+                                            match old_client.replace_with_newer_values(client)
+                                            {
+                                                Ok(_) => {},
+                                                Err(err) => {info!("Couldn't replace the old_client: {:?}", err)}
+                                        
+                                            }
                                         },
                                         None => {
                                             // nooo
@@ -309,11 +361,8 @@ async fn server_global_state_manager(
                             let (mut clients, _) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
 
-                            // let (_, temp_client_connection) = online_connections.get_mut(&client.user_id).unwrap();
-                            // send_command_to_client_by_uuid(client.user_id, ).await
         send_command_to_client_by_uuid(client.user_id, Command::OnlineClients(clients, current_round), &mut online_connections).await
 
-                            // temp_client_connection.send(Envelope::OnlineClients(clients, current_round)).await.unwrap();
                         }
                         Command::ClosedConnection(client) => {
         {
@@ -344,7 +393,11 @@ async fn server_global_state_manager(
                                     match online_connections.get_mut(&receiver_uuid){
                                         Some((_client, client_channel)) => {
                                             info!("Trying to re-route the message to the appropriate client.");
-                                            client_channel.send(first_clone.clone()).await.unwrap();
+                                            match client_channel.send(first_clone.clone()).await
+                                            {
+                                                Ok(_) => info!("sent message!"),
+                                                Err(err) => info!("Error: {:?}",  err)
+                                            }
                                         }
                                         None => {
                                             info!("This is bad...Need to make custom error messages. I think messages could have statuses too...");
@@ -359,15 +412,14 @@ async fn server_global_state_manager(
                             }
                         }
                         else {
-                            // if let  EntityDetails::Client(uuid) = control_message.receiver.entity_detail{
-                            //     let (_client, connection) = online_connections.get_mut(&uuid).unwrap();
-                            // }
+                            
 
                             info!("When passing messages for the server, be sure to make sure that the server is either the receiver or the intermediary...");
                             info!("The following was received by the server but not addressed to the server: {:?}", first_clone);
                         }
 
 
+                        }
                     }
 
 
@@ -386,7 +438,7 @@ async fn main() {
         //.with_span_events(FmtSpan::FULL)
         .init();
 
-    let mut listener = TcpListener::bind("127.0.0.1:80").await.unwrap();
+    let mut listener = TcpListener::bind("127.0.0.1:80").await.expect("Couldn't bind to server address!");
 
     let (global_state_updater_tx, global_state_updater_rx) =
         mpsc::channel::<(Envelope, Option<mpsc::Sender<Envelope>>)>(10);
