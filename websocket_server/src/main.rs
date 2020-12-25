@@ -96,14 +96,6 @@ async fn establish_and_maintain_each_client_ws_connection(
         .await
         .expect("failed to accept websocket.");
 
-    // Envelope {
-    //     command: Command::ClientCommand(ClientCommand::ServerInitiated(
-    //         this_client.clone(),
-    //     )),
-    //     sender: Entity::Server,
-    //     receiver: Entity::Client,
-    // }
-
     let envelope = Envelope::new(
         EntityDetails::Server,
         EntityDetails::Client(this_client.user_id.clone()),
@@ -171,7 +163,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                     .send((envelope,None))
                     .await
                     .expect("The connection was closed :[");
-                    break // gets out of the loop... should deallocate everything?
+                    //break // gets out of the loop... should deallocate everything?
     
     
                             }
@@ -438,7 +430,7 @@ async fn main() {
         //.with_span_events(FmtSpan::FULL)
         .init();
 
-    let mut listener = TcpListener::bind("127.0.0.1:80").await.expect("Couldn't bind to server address!");
+    let mut listener = TcpListener::bind("0.0.0.0:8080").await.expect("Couldn't bind to server address!");
 
     let (global_state_updater_tx, global_state_updater_rx) =
         mpsc::channel::<(Envelope, Option<mpsc::Sender<Envelope>>)>(10);

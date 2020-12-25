@@ -33,7 +33,7 @@ enum State {
     ConnectedToRtcPeer,
 }
 
-static WEBSOCKET_URL: &str = "ws://127.0.0.1:80";
+static WEBSOCKET_URL: &str = "ws://0.0.0.0:8080";
 
 struct Model {
     event_log: Vec<String>,
