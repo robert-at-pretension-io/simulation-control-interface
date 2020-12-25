@@ -80,6 +80,11 @@ async fn establish_and_maintain_each_client_ws_connection(
         current_socket_addr: address,
     };
 
+    let mut ws_stream = tokio_tungstenite::accept_async(stream)
+    .await
+    .expect("failed to accept websocket.");
+
+
     let envelope = Envelope::new(
         EntityDetails::Server,
         EntityDetails::Server,
@@ -92,9 +97,6 @@ async fn establish_and_maintain_each_client_ws_connection(
         .await
         .expect("The connection was closed before even getting to update the status within a system. The odds of this happening normally are extremely low... Like someone would have to connection and then almost instantaneously close the connection:[");
 
-    let mut ws_stream = tokio_tungstenite::accept_async(stream)
-        .await
-        .expect("failed to accept websocket.");
 
     let envelope = Envelope::new(
         EntityDetails::Server,
