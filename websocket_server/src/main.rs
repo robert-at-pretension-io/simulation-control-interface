@@ -109,6 +109,7 @@ async fn establish_and_maintain_each_client_ws_connection(
     )
     .await;
 
+
     loop {
         tokio::select! {
 
@@ -134,46 +135,51 @@ async fn establish_and_maintain_each_client_ws_connection(
             val = ws_stream.try_next() => {
                 match val {
                     Ok(value) => {
+                        if value.is_some() {
                         match value.unwrap() {
-                            Message::Text(text) => {info!("received text: {:?}", text);},
-                            Message::Binary(bin) => {
-                                match Envelope::deserialize(&bin) {
-                                    Ok(control_message) => {
-                                        match tx_server_state_manager.send((control_message, None)).await
-                                        {
-                                            Ok(_) => {},
-                                            Err(err) => {info!("Received the following error: {:?}", err)}
-                                    
-                                        }
-                                    },
-                                    Err(oh_boy) => {info!("Error receiving message from ws client: {:?}", oh_boy)}
+                                Message::Text(text) => {info!("received text: {:?}", text);},
+                                Message::Binary(bin) => {
+                                    match Envelope::deserialize(&bin) {
+                                        Ok(control_message) => {
+                                            match tx_server_state_manager.send((control_message, None)).await
+                                            {
+                                                Ok(_) => {},
+                                                Err(err) => {info!("Received the following error: {:?}", err)}
+                                        
+                                            }
+                                        },
+                                        Err(oh_boy) => {info!("Error receiving message from ws client: {:?}", oh_boy)}
+                                    }
+                                },
+                                Message::Close(reason) => {
+                    info!("The client is trying to close the connection for the following reason: {:?}", reason);
+        
+                    let envelope = Envelope::new(
+                        EntityDetails::Client(this_client.user_id.clone()),
+                        EntityDetails::Server,
+                        None,
+                        Command::ClosedConnection(this_client.clone())
+                    );
+        
+                    match tx_server_state_manager
+                        .send((envelope,None))
+                        .await {
+                            Ok(_) => {info!("successfully closed/removed the connection!")},
+                            Err(err) => {info!("Had the following error while trying to send a ClosedConnection command to the tx_server_state_manager:\n {:?}", err);}
+                        }
+        
+        
                                 }
-                            },
-                            Message::Close(reason) => {
-                info!("The client is trying to close the connection for the following reason: {:?}", reason);
-    
-                let envelope = Envelope::new(
-                    EntityDetails::Client(this_client.user_id.clone()),
-                    EntityDetails::Server,
-                    None,
-                    Command::ClosedConnection(this_client.clone())
-                );
-    
-                tx_server_state_manager
-                    .send((envelope,None))
-                    .await
-                    .expect("The connection was closed :[");
-                    //break // gets out of the loop... should deallocate everything?
-    
-    
-                            }
-                            Message::Ping(_)  => {
-                                info!("ping message received")
-                            }
-                            Message::Pong(_) => {
-                                info!("pong message received")
+                                Message::Ping(_)  => {
+                                    info!("ping message received")
+                                }
+                                Message::Pong(_) => {
+                                    info!("pong message received")
+                                }
                             }
                         }
+                        
+                        
     
                     }
                     Err(err) => {
