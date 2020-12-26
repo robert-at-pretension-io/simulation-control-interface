@@ -17,10 +17,12 @@ use std::net::SocketAddr;
 use std::collections::HashSet;
 
 // all of these are for webrtc
-use js_sys::Reflect;
+use js_sys::{Reflect, Array};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{MediaDevices, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit, WebSocket, Window, MediaStreamConstraints, RtcConfiguration};
+use web_sys::{MediaDevices, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit, WebSocket, Window, MediaStreamConstraints, RtcConfiguration,RtcIceServer, RtcIceConnectionState, 
+    RtcIceGatheringState,
+    RtcSignalingState};
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 enum State {
@@ -78,6 +80,7 @@ enum Msg {
     SendSdpResponse(uuid::Uuid, String),
     ReceiveSdpResponse(uuid::Uuid, String),
     OverrideRtcPeer(RtcPeerConnection),
+    ReportRtcDiagnostics(),
 
     InitiateWebsocketConnectionProcess,
     ServerSentWsMessage(String),
@@ -87,6 +90,7 @@ enum Msg {
     CloseWebsocketConnection,
     RequestUsersOnline(Client),
     SendWsMessage(Envelope),
+    
 }
 
 extern crate web_sys;
@@ -273,10 +277,31 @@ impl Model {
             as Box<dyn FnMut(RtcPeerConnectionIceEvent)>);
 
         let mut config = RtcConfiguration::new();
-        let config = config.ice_servers(&JsValue::from_str("[stun.l.google.com:19302]"));
+        // let mut ice_server = RtcIceServer::new();
+
+        use serde::{Serialize, Deserialize};
+
+        #[derive(Serialize, Deserialize)]
+        struct Test {
+            urls : String
+        };
+
+
+        let val = JsValue::from_serde(&[Test{urls: String::from("stun:stun.services.mozilla.com")}]).unwrap();
+
+
+        // let val = ice_server.url("stun:stun.services.mozilla.com");
+
+        // let val = JsValue::from_serde(ice_server).unwrap();
+        
+
+        let config = config.ice_servers(&val);
         let client = RtcPeerConnection::new_with_configuration(&config);
+
+        
         match client.clone() {
             Ok(client) => {          
+                self.link.send_message(Msg::LogEvent(format!("successfully setup stun server!")));
                 client.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
 
                 onicecandidate_callback.forget();
@@ -438,9 +463,19 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::ReportRtcDiagnostics() => {
+                if self.local_web_rtc_connection.is_some(){
+                    let local = self.local_web_rtc_connection.clone().unwrap();
+                    self.link.send_message(Msg::LogEvent(format!("RTC Connection Status:\nIce Connection State: {:?}\nSignaling State: {:?}\nIce Gathering State: {:?}", local.ice_connection_state(), local.signaling_state(), local.ice_gathering_state())));
+                    true
+                } else {
+                    false
+                }
+            }
             Msg::OverrideRtcPeer(local) => {
                 self.link
                     .send_message(Msg::LogEvent(format!("override the old WebRtcConnection")));
+                    self.link.send_message(Msg::ReportRtcDiagnostics());
                 self.local_web_rtc_connection = Some(local);
                 true
             }
@@ -467,6 +502,7 @@ impl Component for Model {
                 self.link.send_message(Msg::LogEvent(format!(
                     "local WebRTC successfully set! Able to send sdp objects to clients now!"
                 )));
+                self.link.send_message(Msg::ReportRtcDiagnostics());
                 self.link.send_message(Msg::SetLocalMedia);
                 false
             }

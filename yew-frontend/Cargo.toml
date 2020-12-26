@@ -11,7 +11,8 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 yew = "0.17"
-wasm-bindgen = "0.2"
+wasm-bindgen = {version = "0.2", features = ["serde-serialize"]}
+serde = { version = "1.0", features = ["derive"] }
 js-sys = "0.3.45"
 models = {path = "../models"}
 
@@ -41,5 +42,9 @@ features = [
   "Window",
   "MediaTrackSupportedConstraints",
   "MediaStreamConstraints",
-  "RtcConfiguration"
+  "RtcConfiguration",
+  "RtcIceServer",
+  "RtcIceConnectionState",
+  "RtcIceGatheringState",
+  "RtcSignalingState"
     ]
