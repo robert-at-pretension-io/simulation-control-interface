@@ -17,7 +17,7 @@ use std::net::SocketAddr;
 use std::collections::HashSet;
 
 // all of these are for webrtc
-use js_sys::{Reflect, Array};
+use js_sys::{Reflect};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{MediaDevices, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit, WebSocket, Window, MediaStreamConstraints, RtcConfiguration,RtcIceServer, RtcIceConnectionState, 
@@ -140,7 +140,7 @@ impl Model {
     }
 
     fn send_ws_message(&mut self, data: Envelope) {
-        let ws = self.websocket.take().unwrap();
+        let ws = self.websocket.take().expect("error getting the websocket :] in send_ws_message function");
 
         let message = data.clone();
 
@@ -228,12 +228,12 @@ impl Model {
                             Command::SdpRequest(request) => {
                                 cloned.send_message(Msg::MakeSdpResponse(
                                     request,
-                                    sender.get_uuid().unwrap(),
+                                    sender.get_uuid().expect("error in Command::SdpRequest"),
                                 ));
                             }
                             Command::SdpResponse(response) => {
                                 cloned.send_message(Msg::ReceiveSdpResponse(
-                                    receiver.get_uuid().unwrap(),
+                                    receiver.get_uuid().expect("error in Command::SdpReponse"),
                                     response,
                                 ));
                             }
@@ -287,13 +287,9 @@ impl Model {
         };
 
 
-        let val = JsValue::from_serde(&[Test{urls: String::from("stun:stun.services.mozilla.com")}]).unwrap();
+        let val = JsValue::from_serde(&[Test{urls: String::from("stun:stun.services.mozilla.com")}]).expect("error converting IceServer to JsValue with serde");
 
 
-        // let val = ice_server.url("stun:stun.services.mozilla.com");
-
-        // let val = JsValue::from_serde(ice_server).unwrap();
-        
 
         let config = config.ice_servers(&val);
         let client = RtcPeerConnection::new_with_configuration(&config);
@@ -318,14 +314,14 @@ async fn get_local_user_media(
     link: ComponentLink<Model>,
     local: RtcPeerConnection,
 ) {
-    let window = web_sys::window().unwrap();
+    let window = web_sys::window().expect("couldn't get window");
     
-    let media_devices : MediaDevices = window.navigator().media_devices().unwrap();
+    let media_devices : MediaDevices = window.navigator().media_devices().expect("Couldn't get the navigator");
 
     let mut constraints = MediaStreamConstraints::new();
     let constraints = constraints.audio(&JsValue::from_bool(true)).video(&JsValue::from_bool(true));
    
-    match JsFuture::from(media_devices.get_user_media_with_constraints(&constraints).unwrap()).await {
+    match JsFuture::from(media_devices.get_user_media_with_constraints(&constraints).expect("Couldn't get user media with restraints")).await {
         Ok(a) => {
             link.send_message(Msg::LogEvent(format!("Alright, able to get user media... should probably do something with it now!")));
             // probably should reset the peer client here... attach the media or something!
@@ -341,13 +337,13 @@ async fn create_webrtc_offer(
     receiver: uuid::Uuid,
     local: RtcPeerConnection,
 ) {
-    let offer = JsFuture::from(local.create_offer()).await.unwrap();
+    let offer = JsFuture::from(local.create_offer()).await.expect("error creating offer.");
 
     
         let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp"))
-            .unwrap()
+            .expect("error getting offer sdp")
             .as_string()
-            .unwrap();
+            .expect("error converting offer sdp to string");
 
         link.send_message(Msg::SendSdpRequestToClient(receiver, offer_sdp));
     
@@ -402,13 +398,13 @@ async fn create_and_set_answer_locally(
         "attempting to create answer to offer..."
     )));
 
-    let answer = JsFuture::from(local.create_answer()).await.unwrap();
+    let answer = JsFuture::from(local.create_answer()).await.expect("couldn't create answer :[");
 
     unsafe {
         let answer_sdp = Reflect::get(&answer, &JsValue::from_str("sdp"))
-            .unwrap()
+            .expect("error making sdp answer...")
             .as_string()
-            .unwrap();
+            .expect("error converting to string");
         //console_log!("pc2: answer {:?}", answer_sdp);
 
         let mut answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
@@ -465,7 +461,7 @@ impl Component for Model {
         match msg {
             Msg::ReportRtcDiagnostics() => {
                 if self.local_web_rtc_connection.is_some(){
-                    let local = self.local_web_rtc_connection.clone().unwrap();
+                    let local = self.local_web_rtc_connection.clone().expect("error unwraping the local_web_rtc_connection");
                     self.link.send_message(Msg::LogEvent(format!("RTC Connection Status:\nIce Connection State: {:?}\nSignaling State: {:?}\nIce Gathering State: {:?}", local.ice_connection_state(), local.signaling_state(), local.ice_gathering_state())));
                     true
                 } else {
@@ -508,7 +504,7 @@ impl Component for Model {
             }
             Msg::SetLocalMedia => {
                 let link = self.link.clone();
-                let local = self.local_web_rtc_connection.clone().unwrap();
+                let local = self.local_web_rtc_connection.clone().expect("error with unwrapping the local web rtc in setlocalmedia msg ");
                 spawn_local(async move {
                     get_local_user_media(link, local).await;
                 });
@@ -543,7 +539,7 @@ impl Component for Model {
 
                 match ws {
                     Some(ws) => {
-                        ws.close().unwrap();
+                        ws.close().expect("Error with closing the ws connection");
                         self.link
                             .send_message(Msg::RemoveState(State::ConnectedToWebsocketServer));
                         true
@@ -599,7 +595,7 @@ impl Component for Model {
             }
             Msg::UpdateUsername(username) => {
                 self.username = Some(username.clone());
-                let user_id = self.user_id.clone().unwrap();
+                let user_id = self.user_id.clone().expect("error unwrapping the user id");
 
                 let envelope = Envelope::new(
                     EntityDetails::Client(user_id.clone()),
@@ -634,7 +630,7 @@ impl Component for Model {
             Msg::ReceivedIceCandidate(_) => false,
             Msg::SendIceCandidate(_) => false,
             Msg::SetLocalWebRtcOffer(offer) => {
-                let local = self.local_web_rtc_connection.clone().unwrap();
+                let local = self.local_web_rtc_connection.clone().expect("error getting the web_rtc in set local web rtc offer message");
 
                 self.link
                     .send_message(Msg::LogEvent(format!("Set the local webRTC offer.")));
@@ -645,7 +641,7 @@ impl Component for Model {
                 true
             }
             Msg::MakeSdpRequestToClient(receiver) => {
-                let local = self.local_web_rtc_connection.clone().unwrap();
+                let local = self.local_web_rtc_connection.clone().expect("unable to get the local web rtc in making sdp request to client");
 
                 let link = self.link.clone();
 
@@ -656,7 +652,7 @@ impl Component for Model {
                 true
             }
             Msg::SendSdpRequestToClient(receiver, sdp) => {
-                let sender = self.user_id.clone().unwrap();
+                let sender = self.user_id.clone().expect("error getting the sender's user id in SendSdpRequestToClient msg");
 
                 self.link
                     .send_message(Msg::SetLocalWebRtcOffer(sdp.clone()));
@@ -678,7 +674,7 @@ impl Component for Model {
                     sdp_response.clone()
                 )));
 
-                let sender = self.user_id.clone().unwrap();
+                let sender = self.user_id.clone().expect("error getting the user_id in SendSdpResponse");
                 let receiver = client.clone();
 
                 let envelope = Envelope::new(
@@ -700,7 +696,7 @@ impl Component for Model {
                     sender.clone()
                 )));
 
-                let local = self.local_web_rtc_connection.clone().unwrap();
+                let local = self.local_web_rtc_connection.clone().expect("error unwrapping the local_web_rtc_connection in ReceiveSdpResponse");
                 let link = self.link.clone();
 
                 spawn_local(async move {set_remote_webrtc_answer(sdp,
@@ -719,7 +715,7 @@ impl Component for Model {
                 let sdp = sdp.clone();
                 let client = client.clone();
 
-                let local = self.local_web_rtc_connection.clone().unwrap();
+                let local = self.local_web_rtc_connection.clone().expect("error in MakeSdpReponse msg");
                 let link = self.link.clone();
 
                 spawn_local(async move { set_remote_webrtc_offer(sdp, client, local, link).await });

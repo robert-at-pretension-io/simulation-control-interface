@@ -16,10 +16,10 @@ use std::collections::{HashMap, HashSet};
 
 use tungstenite::Message;
 
-use log::{info, warn};
+use log::{info};
 use tracing::{instrument, Level};
 
-use models::{Client, Command, Entity, EntityDetails, EntityTypes, Envelope};
+use models::{Client, Command, EntityDetails, EntityTypes, Envelope};
 
 #[instrument()]
 async fn send_message(stream: &mut WebSocketStream<TcpStream>, message: tungstenite::Message) {
@@ -70,7 +70,7 @@ async fn establish_and_maintain_each_client_ws_connection(
         let mut address : Option<std::net::SocketAddr> = None;
     match stream.peer_addr() {
         Ok(add) => {address = Some(add)},
-        Err(err) => info!("Couldn't unwrap the stream's ip address :[")
+        Err(err) => info!("Couldn't unwrap the stream's ip address :[ ... {:?}", err)
     }
 
     let this_client = Client {
@@ -119,8 +119,8 @@ async fn establish_and_maintain_each_client_ws_connection(
             match control_message {
                 Some(control_message) => {
                     match ws_stream.send(tungstenite::Message::Binary(control_message.serialize())).await {
-                        Ok(great) => {info!("successfully received the control message!")},
-                        Err(err) => {info!("Couldn't send the message properly")}
+                        Ok(_) => {info!("successfully received the control message!")},
+                        Err(err) => {info!("Couldn't send the message properly due to the following err: {:?}", err)}
                     }
                 }
                 None => {
@@ -250,7 +250,7 @@ async fn server_global_state_manager(
 
     tokio::spawn(async move { game_loop(status_processer_notifier_tx, 60).await });
 
-    let mut current_round = 0;
+    let current_round = 0;
 
     loop {
         tokio::select! {

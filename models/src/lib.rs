@@ -1,7 +1,7 @@
 use bincode;
 use serde::{Deserialize, Serialize};
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{ HashSet};
 use std::net::SocketAddr;
 
 #[derive(Debug, Serialize, Deserialize, Eq, Hash, Clone)]
@@ -57,7 +57,7 @@ pub struct Entity {
 impl Entity {
     pub fn new(entity_detail: EntityDetails) -> Entity {
         let entity_type = match entity_detail {
-            EntityDetails::Client(uuid) => EntityTypes::Client,
+            EntityDetails::Client(_uuid) => EntityTypes::Client,
             EntityDetails::Server => EntityTypes::Server,
         };
 
