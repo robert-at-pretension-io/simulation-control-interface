@@ -323,15 +323,24 @@ async fn get_local_user_media(
     let media_devices : MediaDevices = window.navigator().media_devices().expect("Couldn't get the navigator");
 
     let mut constraints = MediaStreamConstraints::new();
-    let constraints = constraints.audio(&JsValue::from_bool(true)).video(&JsValue::from_bool(true));
+    let constraints = constraints.audio(&JsValue::from_bool(true));
+    //.video(&JsValue::from_bool(true));
    
-    match JsFuture::from(media_devices.get_user_media_with_constraints(&constraints).expect("Couldn't get user media with restraints")).await {
-        Ok(a) => {
-            link.send_message(Msg::LogEvent(format!("Alright, able to get user media... should probably do something with it now!")));
-            // probably should reset the peer client here... attach the media or something!
+
+    match media_devices.get_user_media_with_constraints(&constraints) {
+        Ok(media) => {
+            match JsFuture::from(media).await {
+                Ok(a) => {
+                    link.send_message(Msg::LogEvent(format!("Alright, able to get user media... should probably do something with it now!")));
+                    // probably should reset the peer client here... attach the media or something!
+                },
+                Err(err) => {link.send_message(Msg::LogEvent(format!("Error with getting user media: {:?}", err)))}
+            }
         },
-        Err(err) => {link.send_message(Msg::LogEvent(format!("Error with getting user media: {:?}", err)))}
+        Err(err) => link.send_message(Msg::LogEvent(format!("Recevied the following error while trying to get the media devices...: {:?}", err)))
     }
+
+
 
 
 }
