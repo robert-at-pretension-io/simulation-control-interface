@@ -24,6 +24,10 @@ use web_sys::{MediaDevices, MediaTrackSupportedConstraints, MessageEvent, Naviga
     RtcIceGatheringState,
     RtcSignalingState};
 
+
+    use console_error_panic_hook;
+use std::panic;
+
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 enum State {
     ConnectedToWebsocketServer,
@@ -574,6 +578,8 @@ impl Component for Model {
             }
             Msg::InitiateWebsocketConnectionProcess => match WebSocket::new(WEBSOCKET_URL) {
                 Ok(ws) => {
+                    panic::set_hook(Box::new(console_error_panic_hook::hook));
+
                     let ws = self.setup_websocket_object_callbacks(ws);
 
                     self.websocket = Some(ws);
