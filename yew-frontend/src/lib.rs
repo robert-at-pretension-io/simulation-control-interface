@@ -328,7 +328,7 @@ async fn get_local_user_media(
    
 
     match media_devices.get_user_media_with_constraints(&constraints) {
-        Ok(media) => {
+        Ok(media ) => {
             match JsFuture::from(media).await {
                 Ok(a) => {
                     link.send_message(Msg::LogEvent(format!("Alright, able to get user media... should probably do something with it now!")));

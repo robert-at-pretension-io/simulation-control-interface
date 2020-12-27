@@ -300,6 +300,7 @@ async fn server_global_state_manager(
 
                             match client_connection.send(envelope).await
                             {
+                                //been exercising too much... time for some R and R
                                 Ok(_) => {},
                                 Err(err) => {info!("Received the following error: {:?}", err)}
                         
