@@ -1,0 +1,42 @@
+warning: unused variable: `client_connections`
+   --> websocket_server/src/main.rs:350:53
+    |
+350 | ...   let ( clients,  client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+    |                       ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_client_connections`
+    |
+    = note: `#[warn(unused_variables)]` on by default
+
+warning: unused variable: `keys`
+   --> websocket_server/src/main.rs:370:33
+    |
+370 | ...                   let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
+    |                           ^^^^ help: if this is intentional, prefix it with an underscore: `_keys`
+
+warning: unused variable: `client_connections`
+   --> websocket_server/src/main.rs:381:45
+    |
+381 | ...   let ( clients,  client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+    |                       ^^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_client_connections`
+
+warning: variable does not need to be mutable
+   --> websocket_server/src/main.rs:447:9
+    |
+447 |     let mut listener = TcpListener::bind("0.0.0.0:8080").await.expect("Couldn't bind to server address!");
+    |         ----^^^^^^^^
+    |         |
+    |         help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` on by default
+
+warning: variable does not need to be mutable
+   --> websocket_server/src/main.rs:472:13
+    |
+472 |         let mut tls_stream = tls_acceptor.accept(stream).await.expect("accept error");
+    |             ----^^^^^^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: 5 warnings emitted
+
+    Finished dev [unoptimized + debuginfo] target(s) in 0.10s
+     Running `/root/simulation-control-interface/target/debug/websocket_server`
