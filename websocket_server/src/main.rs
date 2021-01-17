@@ -462,6 +462,9 @@ async fn main() {
     loop {
         let tls_acceptor = tls_acceptor.clone();
         let (stream, remote_addr) = listener.accept().await.unwrap();
+
+        info!("Accepted connection from: {}", remote_addr.clone());
+
         let global_state_updater_tx_clone = global_state_updater_tx.clone();
 
         // let stream = stream.into_std().unwrap();
