@@ -6,4 +6,5 @@ members = [
     "websocket_server",
     "yew-frontend",
     "models",
+    "graphical_control_application"
 ]
