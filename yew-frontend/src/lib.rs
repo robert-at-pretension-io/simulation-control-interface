@@ -7,6 +7,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 
 // God knows what evils this crate includes.
+// ^ Thanks I needed that laugh..
 use yew::prelude::*;
 
 // This local trait is for shared objects between the frontend and the backend

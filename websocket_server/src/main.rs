@@ -347,7 +347,7 @@ async fn server_global_state_manager(
                                         }
                                     }
 
-                                    let ( clients,  client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+                                    let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
                                     let clients = clients.clone();
 
@@ -367,7 +367,6 @@ async fn server_global_state_manager(
                         }
                         Command::ReadyForPartner(client) => {
                             info!("{:?} would like to get partner please", client.user_id);
-                            let keys : HashSet<uuid::Uuid> = online_connections.keys().cloned().collect();
                             let ( clients, _) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
 
@@ -378,7 +377,7 @@ async fn server_global_state_manager(
         {
                             online_connections.remove_entry(&client.user_id);
         }
-                            let ( clients,  client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+                            let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
                             let clients = clients.clone();
 
@@ -444,7 +443,7 @@ async fn main() {
         //.with_span_events(FmtSpan::FULL)
         .init();
 
-    let mut listener = TcpListener::bind("0.0.0.0:8080").await.expect("Couldn't bind to server address!");
+    let  listener = TcpListener::bind("0.0.0.0:8080").await.expect("Couldn't bind to server address!");
 
     let (global_state_updater_tx, global_state_updater_rx) =
         mpsc::channel::<(Envelope, Option<mpsc::Sender<Envelope>>)>(10);
@@ -469,8 +468,7 @@ async fn main() {
 
         info!("Accepted connection from {}", remote_addr);
 
-        let mut tls_stream = tls_acceptor.accept(stream).await.expect("accept error");
-        // let mut tls_stream = tls_stream.get_mut();
+        let  tls_stream = tls_acceptor.accept(stream).await.expect("accept error");
 
         tokio::spawn(async move{
             establish_and_maintain_each_client_ws_connection(global_state_updater_tx_clone, tls_stream, remote_addr)
