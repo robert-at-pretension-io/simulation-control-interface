@@ -35,9 +35,9 @@ enum State {
     ConnectedToRtcPeer,
 }
 
-static WEBSOCKET_URL: &str = "wss://liminalnook.com:8080";
+static WEBSOCKET_URL: &str = "wss://liminalnook.com:2096";
 
-struct Model {
+
     event_log: Vec<String>,
     connection_socket_address: Option<SocketAddr>,
     user_id: Option<uuid::Uuid>,
@@ -586,9 +586,12 @@ impl Component for Model {
                 self.link.send_message(Msg::LogEvent(message));
                 true
             }
-            Msg::InitiateWebsocketConnectionProcess => match WebSocket::new(WEBSOCKET_URL) {
-                Ok(ws) => {
+            Msg::InitiateWebsocketConnectionProcess => 
+                {
+
                     panic::set_hook(Box::new(console_error_panic_hook::hook));
+                match WebSocket::new(WEBSOCKET_URL) {
+                Ok(ws) => {
 
                     let ws = self.setup_websocket_object_callbacks(ws);
 
@@ -603,7 +606,9 @@ impl Component for Model {
                         .send_message(Msg::LogEvent(format!("error: {:?}", err)));
                     true
                 }
-            },
+
+                };
+            }
             Msg::SetClient(client) => {
                 self.client_to_model(client);
 

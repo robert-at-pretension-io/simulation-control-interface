@@ -443,7 +443,7 @@ async fn main() {
         //.with_span_events(FmtSpan::FULL)
         .init();
 
-    let  listener = TcpListener::bind("0.0.0.0:8080").await.expect("Couldn't bind to server address!");
+    let  listener = TcpListener::bind("0.0.0.0:2096").await.expect("Couldn't bind to server address!");
 
     let (global_state_updater_tx, global_state_updater_rx) =
         mpsc::channel::<(Envelope, Option<mpsc::Sender<Envelope>>)>(10);
