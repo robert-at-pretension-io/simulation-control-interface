@@ -248,6 +248,10 @@ async fn game_loop(
     }
 }
 
+async fn send_command_to_clients(client_list : HashMap::<uuid::Uuid, (Client, mpsc::Sender<Envelope>)> , command : Command) {
+
+} 
+
 #[instrument]
 async fn server_global_state_manager(
     mut global_state_update_transceiver: Receiver<(Envelope, Option<mpsc::Sender<Envelope>>)>,
@@ -308,7 +312,6 @@ async fn server_global_state_manager(
 
                             match client_connection.send(envelope).await
                             {
-                                //been exercising too much... time for some R and R
                                 Ok(_) => {},
                                 Err(err) => {info!("Received the following error: {:?}", err)}
                         

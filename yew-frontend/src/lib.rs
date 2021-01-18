@@ -218,6 +218,7 @@ impl Model {
                                 cloned.send_message_batch(messages);
                             }
                             Command::OnlineClients(clients, _round_number) => {
+                                cloned.send_message(Msg::LogEvent(format!("Updating the clients online")));
                                 cloned.send_message(Msg::UpdateOnlineUsers(clients))
                             }
                             Command::ClientInfo(client) => {
