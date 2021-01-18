@@ -608,7 +608,7 @@ impl Component for Model {
                     true
                 }
 
-                };
+                }
             }
             Msg::SetClient(client) => {
                 self.client_to_model(client);
