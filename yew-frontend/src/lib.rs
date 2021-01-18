@@ -37,7 +37,7 @@ enum State {
 
 static WEBSOCKET_URL: &str = "wss://liminalnook.com:2096";
 
-
+struct Model {
     event_log: Vec<String>,
     connection_socket_address: Option<SocketAddr>,
     user_id: Option<uuid::Uuid>,
