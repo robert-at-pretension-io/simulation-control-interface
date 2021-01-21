@@ -377,9 +377,12 @@ async fn server_global_state_manager(
 
                         }
                         Command::ClosedConnection(client) => {
-        {
+                            info!("Before closing the connection the online connections are: {:?}", online_connections.clone());
+                            {
                             online_connections.remove_entry(&client.user_id);
         }
+                            info!("After closing the connection the online_connections are: {:?}", online_connections.clone());
+
                             let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
                             let clients = clients.clone();
