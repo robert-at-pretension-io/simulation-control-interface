@@ -23,7 +23,8 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{MediaDevices, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit, WebSocket, Window, MediaStreamConstraints, RtcConfiguration,RtcIceServer, RtcIceConnectionState, 
     RtcIceGatheringState,
-    RtcSignalingState};
+    RtcSignalingState,
+    MediaStream};
 
 
     use console_error_panic_hook;
@@ -38,6 +39,7 @@ enum State {
 static WEBSOCKET_URL: &str = "wss://liminalnook.com:2096";
 
 struct Model {
+    stream : Option<MediaStream>,
     event_log: Vec<String>,
     connection_socket_address: Option<SocketAddr>,
     user_id: Option<uuid::Uuid>,
@@ -53,6 +55,7 @@ struct Model {
 
 impl Model {
     fn reset_state(&mut self) {
+        self.stream = None;
         self.username = None;
         self.user_id = None;
         self.connection_socket_address = None;
@@ -72,6 +75,7 @@ enum Msg {
 
     SetupWebRtc(),
     RtcClientReady(RtcPeerConnection),
+    StoreMediaStream(MediaStream),
     ReceivedIceCandidate(String),
     SendIceCandidate(String),
     AddLocalIceCandidate(String),
@@ -325,16 +329,16 @@ async fn get_local_user_media(
     let media_devices : MediaDevices = window.navigator().media_devices().expect("Couldn't get the navigator");
 
     let mut constraints = MediaStreamConstraints::new();
-    let constraints = constraints.audio(&JsValue::from_bool(true));
-    //.video(&JsValue::from_bool(true));
+    let constraints = constraints.audio(&JsValue::from_bool(true)).video(&JsValue::from_bool(true));
    
 
     match media_devices.get_user_media_with_constraints(&constraints) {
         Ok(media ) => {
             match JsFuture::from(media).await {
-                Ok(a) => {
+                Ok(stream ) => {
+                    let stream = stream.dyn_into::<MediaStream>().unwrap();
                     link.send_message(Msg::LogEvent(format!("Alright, able to get user media... should probably do something with it now!")));
-                    // probably should reset the peer client here... attach the media or something!
+                    link.send_message(Msg::StoreMediaStream(stream));
                 },
                 Err(err) => {link.send_message(Msg::LogEvent(format!("Error with getting user media: {:?}", err)))}
             }
@@ -460,6 +464,7 @@ impl Component for Model {
         Model {
             local_web_rtc_connection: None,
             link,
+            stream: None,
             websocket: None,
             local_ice_candidate: Vec::<String>::new(),
             event_log: Vec::<String>::new(),
@@ -482,6 +487,11 @@ impl Component for Model {
                 } else {
                     false
                 }
+            }
+            Msg::StoreMediaStream(stream) => {
+                self.stream = Some(stream);
+                self.link.send_message(Msg::LogEvent(format!("Need to update the local video to include the new stream.")));
+                true
             }
             Msg::OverrideRtcPeer(local) => {
                 self.link

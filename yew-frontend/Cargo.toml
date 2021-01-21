@@ -44,6 +44,7 @@ features = [
   "Window",
   "MediaTrackSupportedConstraints",
   "MediaStreamConstraints",
+  "MediaStream",
   "RtcConfiguration",
   "RtcIceServer",
   "RtcIceConnectionState",
