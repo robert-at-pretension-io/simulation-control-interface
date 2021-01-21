@@ -336,9 +336,14 @@ async fn get_local_user_media(
         Ok(media ) => {
             match JsFuture::from(media).await {
                 Ok(stream ) => {
-                    let stream = stream.dyn_into::<MediaStream>().unwrap();
-                    link.send_message(Msg::LogEvent(format!("Alright, able to get user media... should probably do something with it now!")));
+                    match   stream.dyn_into::<MediaStream>() {
+                        Ok(stream) => {
+                            link.send_message(Msg::LogEvent(format!("Alright, able to get user media... should probably do something with it now!")));
                     link.send_message(Msg::StoreMediaStream(stream));
+                        }
+                        Err(err) => {link.send_message(Msg::LogEvent(format!("Error: {:?}", err)))}
+                    }
+                    
                 },
                 Err(err) => {link.send_message(Msg::LogEvent(format!("Error with getting user media: {:?}", err)))}
             }
