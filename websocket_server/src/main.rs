@@ -163,21 +163,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                                 },
                                 Message::Close(_reason) => {
                                     return
-                    // info!("The client is trying to close the connection for the following reason: {:?}", reason);
-        
-                    // let envelope = Envelope::new(
-                    //     EntityDetails::Client(this_client.user_id.clone()),
-                    //     EntityDetails::Server,
-                    //     None,
-                    //     Command::ClosedConnection(this_client.user_id.clone())
-                    // );
-        
-                    // match tx_server_state_manager
-                    //     .send((envelope,None))
-                    //     .await {
-                    //         Ok(_) => {info!("successfully closed/removed the connection!"); },
-                    //         Err(err) => {info!("Had the following error while trying to send a ClosedConnection command to the tx_server_state_manager:\n {:?}", err);}
-                    //     }
+                    
         
         
                                 }
@@ -195,8 +181,26 @@ async fn establish_and_maintain_each_client_ws_connection(
                     }
                     Err(err) => {
                         info!("Received the following error trying to send the message: {:?}", err);
-                        
+                    
+                        info!("The client is trying to close the connection for the following reason: {:?}", reason);
+        
+                    let envelope = Envelope::new(
+                        EntityDetails::Client(this_client.user_id.clone()),
+                        EntityDetails::Server,
+                        None,
+                        Command::ClosedConnection(this_client.user_id.clone())
+                    );
+        
+                    match tx_server_state_manager
+                        .send((envelope,None))
+                        .await {
+                            Ok(_) => {info!("successfully closed/removed the connection!"); },
+                            Err(err) => {info!("Had the following error while trying to send a ClosedConnection command to the tx_server_state_manager:\n {:?}", err);}
+                        }
+
                     }
+
+                    return // FUCK THAT CLIENT ANYWAYS
                 }
 
 
