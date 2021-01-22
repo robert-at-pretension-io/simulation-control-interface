@@ -390,12 +390,19 @@ async fn server_global_state_manager(
                             {
                             match online_connections.remove_entry(&client){
                                 Some((uuid,(_client, channel))) => {
-                                    channel.send(Envelope::new(
+                                    match channel.send(Envelope::new(
                                         EntityDetails::Server,
                                         EntityDetails::Client(uuid),
                                         None,
                                         Command::AckClosedConnection(uuid)
-                                    )).await.expect("Ehhh hope this doesn't break");
+                                    )).await {
+                                        Ok(_) => {
+
+                                        },
+                                        Err(err) => {
+                                            info!("This will fail in the case that the client shut down without handshaking. How shameful. That's ok... I'm making note of this. Revenge will be had. {:?}", err);
+                                        }
+                                    }
                                 },
                                 None => {
 
