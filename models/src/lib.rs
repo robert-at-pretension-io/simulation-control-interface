@@ -1,5 +1,6 @@
 use bincode;
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 use std::collections::{ HashSet};
 use std::net::SocketAddr;
@@ -99,7 +100,7 @@ pub enum Command {
     /// The receiver in the message direction is the client that initially sent the SDP Request
     SdpResponse(String),
     /// This is used for ending the websocket connection between the client and the server. The message direction indicates who has initiated the closure.
-    ClosedConnection(Client),
+    ClosedConnection(uuid::Uuid),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

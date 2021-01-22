@@ -168,7 +168,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                         EntityDetails::Client(this_client.user_id.clone()),
                         EntityDetails::Server,
                         None,
-                        Command::ClosedConnection(this_client.clone())
+                        Command::ClosedConnection(this_client.user_id.clone())
                     );
         
                     match tx_server_state_manager
@@ -194,7 +194,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                     }
                     Err(err) => {
                         info!("Received the following error trying to send the message: {:?}", err);
-                        break
+                        
                     }
                 }
 
@@ -379,7 +379,7 @@ async fn server_global_state_manager(
                         Command::ClosedConnection(client) => {
                             info!("Before closing the connection the online connections are: {:?}", online_connections.clone());
                             {
-                            online_connections.remove_entry(&client.user_id);
+                            online_connections.remove_entry(&client);
         }
                             info!("After closing the connection the online_connections are: {:?}", online_connections.clone());
 

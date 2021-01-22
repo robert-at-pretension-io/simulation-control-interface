@@ -567,6 +567,17 @@ impl Component for Model {
             Msg::CloseWebsocketConnection => {
                 let ws = self.websocket.take();
 
+                let envelope = Envelope::new(
+                    EntityDetails::Client(self.user_id.clone().unwrap()),
+                    EntityDetails::Server,
+                    None,
+                    Command::ClosedConnection(self.user_id.clone().unwrap())
+                );
+
+                 self.link.send_message(Msg::SendWsMessage(envelope));
+
+
+
                 match ws {
                     Some(ws) => {
                         ws.close().expect("Error with closing the ws connection");
