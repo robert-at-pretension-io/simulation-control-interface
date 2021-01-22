@@ -161,8 +161,8 @@ async fn establish_and_maintain_each_client_ws_connection(
                                         Err(oh_boy) => {info!("Error receiving message from ws client: {:?}", oh_boy)}
                                     }
                                 },
-                                Message::Close(reason) => {
-
+                                Message::Close(_reason) => {
+                                    return
                     // info!("The client is trying to close the connection for the following reason: {:?}", reason);
         
                     // let envelope = Envelope::new(
