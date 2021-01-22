@@ -368,6 +368,9 @@ async fn server_global_state_manager(
                         Command::OnlineClients(_clients, _round_number) => {
                             // oof just not useful.
                         }
+                        Command::AckClosedConnection(_) => {
+                            // This is only useful on the clientside
+                        }
                         Command::ReadyForPartner(client) => {
                             info!("{:?} would like to get partner please", client.user_id);
                             let ( clients, _) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
