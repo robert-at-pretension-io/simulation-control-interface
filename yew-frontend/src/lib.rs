@@ -92,11 +92,13 @@ enum Msg {
     ReportRtcDiagnostics(),
 
     InitiateWebsocketConnectionProcess,
+
     ServerSentWsMessage(String),
     UpdateOnlineUsers(HashSet<Client>),
     AddState(State),
     RemoveState(State),
     CloseWebsocketConnection,
+    EndWebsocketConnection,
     RequestUsersOnline(Client),
     SendWsMessage(Envelope),
     
@@ -249,6 +251,9 @@ impl Model {
                             }
                             Command::ClosedConnection(_) => {
                                 cloned.send_message(Msg::ResetPage)
+                            }
+                            Command::AckClosedConnection(_) => {
+                                cloned.send_message(Msg::EndWebsocketConnection)
                             }
                         }
                     }
@@ -565,7 +570,6 @@ impl Component for Model {
                 true
             }
             Msg::CloseWebsocketConnection => {
-                let ws = self.websocket.take();
 
                 let envelope = Envelope::new(
                     EntityDetails::Client(self.user_id.clone().unwrap()),
@@ -573,10 +577,15 @@ impl Component for Model {
                     None,
                     Command::ClosedConnection(self.user_id.clone().unwrap())
                 );
-
+                 self.link.send_message(Msg::LogEvent(format!("Informing the server about the desire to end the connection")));
                  self.link.send_message(Msg::SendWsMessage(envelope));
 
+                
+                true
 
+            }
+            Msg::EndWebsocketConnection => {
+                let ws = self.websocket.take();
 
                 match ws {
                     Some(ws) => {

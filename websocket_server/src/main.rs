@@ -379,7 +379,19 @@ async fn server_global_state_manager(
                         Command::ClosedConnection(client) => {
                             info!("Before closing the connection the online connections are: {:?}", online_connections.clone());
                             {
-                            online_connections.remove_entry(&client);
+                            match online_connections.remove_entry(&client){
+                                Some((uuid,(_client, channel))) => {
+                                    channel.send(Envelope::new(
+                                        EntityDetails::Server,
+                                        EntityDetails::Client(uuid),
+                                        None,
+                                        Command::AckClosedConnection(uuid)
+                                    )).await.expect("Ehhh hope this doesn't break");
+                                },
+                                None => {
+
+                                }
+                            }
         }
                             info!("After closing the connection the online_connections are: {:?}", online_connections.clone());
 
