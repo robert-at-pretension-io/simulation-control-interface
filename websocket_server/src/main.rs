@@ -198,9 +198,10 @@ async fn establish_and_maintain_each_client_ws_connection(
                             Err(err) => {info!("Had the following error while trying to send a ClosedConnection command to the tx_server_state_manager:\n {:?}", err);}
                         }
 
+                    return // FUCK THAT CLIENT ANYWAYS
+
                     }
 
-                    return // FUCK THAT CLIENT ANYWAYS
                 }
 
 
