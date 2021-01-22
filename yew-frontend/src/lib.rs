@@ -201,6 +201,7 @@ impl Model {
 
                 match Envelope::deserialize(&array.to_vec()) {
                     Ok(result) => {
+                        cloned.send_message(Msg::LogEvent(format!("Received the following command message: {:?}", result.command.clone())));
                         let sender = result.sender;
                         let receiver = result.receiver;
                         match result.command {
