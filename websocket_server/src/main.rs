@@ -497,20 +497,23 @@ async fn main() {
         let tls_acceptor = tls_acceptor.clone();
         let (stream, remote_addr) = listener.accept().await.unwrap();
 
-        info!("Accepted connection from: {}", remote_addr.clone());
-
         let global_state_updater_tx_clone = global_state_updater_tx.clone();
-
-        // let stream = stream.into_std().unwrap();
 
         info!("Accepted connection from {}", remote_addr);
 
-        let  tls_stream = tls_acceptor.accept(stream).await.expect("accept error");
+        match tls_acceptor.accept(stream).await {
+            Ok(tls_stream) => {
+                tokio::spawn(async move{
+                    establish_and_maintain_each_client_ws_connection(global_state_updater_tx_clone, tls_stream, remote_addr)
+                        .await
+                });
+            }
+            Err(err) => {
+                info!("Could not let the client upgrade to tls :( ... at least we have the reason: {:?}", err);
+            }
+        }
 
-        tokio::spawn(async move{
-            establish_and_maintain_each_client_ws_connection(global_state_updater_tx_clone, tls_stream, remote_addr)
-                .await
-        });
+      
 
     }
 
