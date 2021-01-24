@@ -41,6 +41,7 @@ static WEBSOCKET_URL: &str = "wss://liminalnook.com:2096";
 struct Model {
     stream : Option<MediaStream>,
     event_log: Vec<String>,
+    event_log_length: usize,
     connection_socket_address: Option<SocketAddr>,
     user_id: Option<uuid::Uuid>,
     username: Option<String>,
@@ -55,6 +56,7 @@ struct Model {
 
 impl Model {
     fn reset_state(&mut self) {
+        self.event_log_length = 5;
         self.stream = None;
         self.username = None;
         self.user_id = None;
@@ -72,6 +74,8 @@ enum Msg {
     ClearLog,
     ResetPage,
     LogEvent(String),
+    IncreaseLogSize,
+    DecreaseLogSize,
 
     SetupWebRtc(),
     RtcClientReady(RtcPeerConnection),
@@ -173,7 +177,7 @@ impl Model {
     fn show_events_in_table(&self) -> Html {
         html!(
             <ul>
-            {for self.event_log.iter().map(|event| {
+            {for self.event_log.iter().rev().take(self.event_log_length).rev().map(|event| {
                 html!(<li> {event} </li>)
             })  }
             </ul>
@@ -479,6 +483,7 @@ impl Component for Model {
             websocket: None,
             local_ice_candidate: Vec::<String>::new(),
             event_log: Vec::<String>::new(),
+            event_log_length: 5,
             connection_socket_address: None,
             user_id: None,
             username: None,
@@ -527,6 +532,19 @@ impl Component for Model {
             }
             Msg::ClearLog => {
                 self.event_log = Vec::<String>::new();
+                true
+            }
+            Msg::IncreaseLogSize => {
+                self.event_log_length = self.event_log_length.clone() + 1;
+                true
+            }
+            Msg::DecreaseLogSize => {
+                if self.event_log_length.clone() > 2 {
+                    self.event_log_length = self.event_log_length.clone() - 1;
+                }
+                else {
+                    self.link.send_message(Msg::LogEvent(format!("Can't decrease the event log size even more...")));
+                }
                 true
             }
             Msg::RtcClientReady(client) => {
@@ -796,6 +814,8 @@ impl Component for Model {
 
                     self.show_welcome_message()}
 
+                    <button onclick=self.link.callback(|_| {Msg::DecreaseLogSize})> {"Decrease Log Size"} </button>
+                    <button onclick=self.link.callback(|_| {Msg::IncreaseLogSize})> {"Increase Log Size"} </button>
 
                 {if (self.event_log.len() > 5 ){ html!(<button onclick=self.link.callback(|_| {Msg::ClearLog})> {"Clear the event log."} </button> )} else {html!(<></>)}  }
                 <div>
