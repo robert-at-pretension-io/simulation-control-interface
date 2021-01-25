@@ -1,20 +1,21 @@
-// Just blatently copy and paste examples from here: 
+// Just blatently copy and paste examples from here:
 // https://github.com/gyscos/cursive/tree/main/examples
 
 use std::process::Command;
-
 
 use openssh::*;
 
 #[tokio::main]
 async fn main() {
-
-
     Command::new("ssh-agent")
-    .arg("-s").output().expect("eh... ssh-agent didn't execute properly...");
+        .arg("-s")
+        .output()
+        .expect("eh... ssh-agent didn't execute properly...");
 
-    let output = Command::new("ssh-add").arg("/home/elliot/.ssh/digial_ocean").output().expect("eh... ssh-add didn't execute properly...");
-
+    let output = Command::new("ssh-add")
+        .arg("/home/elliot/.ssh/digial_ocean")
+        .output()
+        .expect("eh... ssh-add didn't execute properly...");
 
     let s = String::from_utf8_lossy(&output.stdout);
 
@@ -30,8 +31,6 @@ async fn main() {
 
     // siv.run();
 
-
-
     let session = Session::connect("ssh://root@134.122.12.127:22", KnownHosts::Accept)
         .await
         .unwrap();
@@ -41,5 +40,4 @@ async fn main() {
         "{}",
         String::from_utf8(ls.stdout).expect("server output was not valid UTF-8")
     );
-
 }

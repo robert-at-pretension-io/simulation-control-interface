@@ -3,34 +3,39 @@ use tokio::sync::mpsc;
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc::Receiver,
-    sync::mpsc::Sender
+    sync::mpsc::Sender,
 };
 
-use tokio_stream::{ StreamExt};
 use futures_util::sink::SinkExt;
+use tokio_stream::StreamExt;
 // use futures_util::stream::StreamExt;
 
 // use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use tokio::time;
 
+use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 
-use tokio_tungstenite::{WebSocketStream, tungstenite::Message};
-
-use std::{collections::{HashMap, HashSet}, net::SocketAddr};
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+};
 
 // use tungstenite::Message;
 
-use log::{info};
+use log::info;
 use tracing::{instrument, Level};
 
 use models::{Client, Command, EntityDetails, EntityTypes, Envelope};
 
-use native_tls::{Identity};
-use tokio_native_tls::{ native_tls};
+use native_tls::Identity;
+use tokio_native_tls::native_tls;
 
 #[instrument()]
-async fn send_message(stream: &mut WebSocketStream<tokio_native_tls::TlsStream<TcpStream>>, message: tokio_tungstenite::tungstenite::Message) {
+async fn send_message(
+    stream: &mut WebSocketStream<tokio_native_tls::TlsStream<TcpStream>>,
+    message: tokio_tungstenite::tungstenite::Message,
+) {
     match message {
         tokio_tungstenite::tungstenite::Message::Binary(message) => {
             info!(
@@ -38,12 +43,17 @@ async fn send_message(stream: &mut WebSocketStream<tokio_native_tls::TlsStream<T
                 &message
             );
             match stream
-                .send(tokio_tungstenite::tungstenite::Message::Binary(message.clone()))
-                .await {
-                    Ok(_) => info!("sent message!"),
-                    Err(err) => info!("Have error trying to send this message: {:?} \n... error: {:?}", message, err)
-                }
-                
+                .send(tokio_tungstenite::tungstenite::Message::Binary(
+                    message.clone(),
+                ))
+                .await
+            {
+                Ok(_) => info!("sent message!"),
+                Err(err) => info!(
+                    "Have error trying to send this message: {:?} \n... error: {:?}",
+                    message, err
+                ),
+            }
         }
         tokio_tungstenite::tungstenite::Message::Text(message) => {
             info!(
@@ -51,12 +61,17 @@ async fn send_message(stream: &mut WebSocketStream<tokio_native_tls::TlsStream<T
                 &message
             );
             match stream
-                .send(tokio_tungstenite::tungstenite::Message::Text(message.clone()))
+                .send(tokio_tungstenite::tungstenite::Message::Text(
+                    message.clone(),
+                ))
                 .await
-                {
-                    Ok(_) => info!("sent message!"),
-                    Err(err) => info!("Have error trying to send this message: {:?} \n... error: {:?}", message, err)
-                }
+            {
+                Ok(_) => info!("sent message!"),
+                Err(err) => info!(
+                    "Have error trying to send this message: {:?} \n... error: {:?}",
+                    message, err
+                ),
+            }
         }
         tokio_tungstenite::tungstenite::Message::Close(_)
         | tokio_tungstenite::tungstenite::Message::Ping(_)
@@ -68,15 +83,15 @@ async fn send_message(stream: &mut WebSocketStream<tokio_native_tls::TlsStream<T
 
 #[instrument]
 async fn establish_and_maintain_each_client_ws_connection(
-     tx_server_state_manager: mpsc::Sender<(Envelope, Option<mpsc::Sender<Envelope>>)>,
+    tx_server_state_manager: mpsc::Sender<(Envelope, Option<mpsc::Sender<Envelope>>)>,
 
-    stream:  tokio_native_tls::TlsStream<TcpStream>,
-    peer_address : SocketAddr
+    stream: tokio_native_tls::TlsStream<TcpStream>,
+    peer_address: SocketAddr,
 ) {
     let (goes_to_specific_ws_client_tx, mut goes_to_specific_ws_client_rx) =
         mpsc::channel::<Envelope>(10);
 
-        let address : Option<std::net::SocketAddr> = Some(peer_address);
+    let address: Option<std::net::SocketAddr> = Some(peer_address);
     // match stream.peer_addr() {
     //     Ok(add) => {address = Some(add)},
     //     Err(err) => info!("Couldn't unwrap the stream's ip address :[ ... {:?}", err)
@@ -90,9 +105,8 @@ async fn establish_and_maintain_each_client_ws_connection(
     };
 
     let mut ws_stream = tokio_tungstenite::accept_async(stream)
-    .await
-    .expect("failed to accept websocket.");
-
+        .await
+        .expect("failed to accept websocket.");
 
     let envelope = Envelope::new(
         EntityDetails::Server,
@@ -106,7 +120,6 @@ async fn establish_and_maintain_each_client_ws_connection(
         .await
         .expect("The connection was closed before even getting to update the status within a system. The odds of this happening normally are extremely low... Like someone would have to connection and then almost instantaneously close the connection:[");
 
-
     let envelope = Envelope::new(
         EntityDetails::Server,
         EntityDetails::Client(this_client.user_id.clone()),
@@ -119,7 +132,6 @@ async fn establish_and_maintain_each_client_ws_connection(
         tokio_tungstenite::tungstenite::Message::binary(envelope.serialize()),
     )
     .await;
-
 
     loop {
         tokio::select! {
@@ -138,9 +150,9 @@ async fn establish_and_maintain_each_client_ws_connection(
 
             }
 
-                
 
-            
+
+
             },
             // This is the interface for incoming messages from the client to the server... Errors can be dealt with here before sending the message off to the server global state manager
             val = ws_stream.try_next() => {
@@ -156,7 +168,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                                             {
                                                 Ok(_) => {},
                                                 Err(err) => {info!("Received the following error: {:?}", err)}
-                                        
+
                                             }
                                         },
                                         Err(oh_boy) => {info!("Error receiving message from ws client: {:?}", oh_boy)}
@@ -164,9 +176,9 @@ async fn establish_and_maintain_each_client_ws_connection(
                                 },
                                 Message::Close(_reason) => {
                                     return
-                    
-        
-        
+
+
+
                                 }
                                 Message::Ping(_)  => {
                                     info!("ping message received")
@@ -176,22 +188,22 @@ async fn establish_and_maintain_each_client_ws_connection(
                                 }
                             }
                         }
-                        
-                        
-    
+
+
+
                     }
                     Err(err) => {
                         info!("Received the following error trying to send the message: {:?}", err);
-                    
+
                         // info!("The client is trying to close the connection for the following reason: {:?}", reason);
-        
+
                     let envelope = Envelope::new(
                         EntityDetails::Client(this_client.user_id.clone()),
                         EntityDetails::Server,
                         None,
                         Command::ClosedConnection(this_client.user_id.clone())
                     );
-        
+
                     match tx_server_state_manager
                         .send((envelope,None))
                         .await {
@@ -226,22 +238,18 @@ async fn send_command_to_client_by_uuid(
         command,
     );
 
-    let (_client, connection_channel) = online_connections.get_mut(&client).expect("couldn't find client in online connections");
-    
-    
-    match connection_channel.clone().send(envelope).await
-    {
-        Ok(_) => {},
-        Err(err) => {info!("Received the following error: {:?}", err)}
+    let (_client, connection_channel) = online_connections
+        .get_mut(&client)
+        .expect("couldn't find client in online connections");
 
+    match connection_channel.clone().send(envelope).await {
+        Ok(_) => {}
+        Err(err) => info!("Received the following error: {:?}", err),
     }
 }
 
 #[instrument]
-async fn game_loop(
-     status_processer_notifier: tokio::sync::mpsc::Sender<u64>,
-    round_interval: u64,
-) {
+async fn game_loop(status_processer_notifier: tokio::sync::mpsc::Sender<u64>, round_interval: u64) {
     let mut interval = time::interval(time::Duration::from_secs(round_interval));
     let mut round_number: u64 = 1;
 
@@ -255,15 +263,19 @@ async fn game_loop(
     }
 }
 
-async fn send_command_to_clients(client_list : HashMap::<uuid::Uuid, (Client, mpsc::Sender<Envelope>)> , command : Command) {
-
-} 
+async fn send_command_to_clients(
+    client_list: HashMap<uuid::Uuid, (Client, mpsc::Sender<Envelope>)>,
+    command: Command,
+) {
+}
 
 #[instrument]
 async fn server_global_state_manager(
-    mut global_state_update_transceiver: Receiver<(Envelope, Option<mpsc::Sender<Envelope>>)> , 
-        global_state_update_sender: Sender<(Envelope, Option<mpsc::Sender<Envelope>>)>
+    mut global_state_update_transceiver: Receiver<(Envelope, Option<mpsc::Sender<Envelope>>)>,
+    global_state_update_sender: Sender<(Envelope, Option<mpsc::Sender<Envelope>>)>,
 ) {
+    // the global_state_update_sender is the mechanism by which the sever gives itself commands
+
     let mut online_connections = HashMap::<uuid::Uuid, (Client, mpsc::Sender<Envelope>)>::new();
 
     let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<u64>(10);
@@ -277,7 +289,7 @@ async fn server_global_state_manager(
 
                     // This is the game time tracker... keeps track of the current round. Can be used for performing system-wide periodic behavior
                     game_notifier = status_processer_notifier_rx.recv() => {
-                        
+
                         match game_notifier {
                             Some(current_round) => {
                                 info!("The new round is starting!! {} ", current_round);
@@ -322,7 +334,7 @@ async fn server_global_state_manager(
                             {
                                 Ok(_) => {},
                                 Err(err) => {info!("Received the following error: {:?}", err)}
-                        
+
                             }
                             let client_id = client.user_id;
 
@@ -350,7 +362,7 @@ async fn server_global_state_manager(
                                             {
                                                 Ok(_) => {},
                                                 Err(err) => {info!("Couldn't replace the old_client: {:?}", err)}
-                                        
+
                                             }
                                         },
                                         None => {
@@ -444,14 +456,14 @@ async fn server_global_state_manager(
                                                 Err(err) => {
                                                     info!("Error: {:?}",  err);
                                                     info!("Need to remove the client from the list of online clients");
-                                                    
+
                                                     let connection_closed = Envelope::new(
                                                         EntityDetails::Server,
                                                         EntityDetails::Server,
                                                         None,
                                                         Command::ClosedConnection(client.user_id)
                                                     );
-                                                    
+
                                                     global_state_update_sender.send((connection_closed, None)).await.expect("This should absolutely not fail... ^_^ I'm so sorry I failed you future self.");
                                                 }
                                             }
@@ -491,7 +503,9 @@ async fn main() {
         //.with_span_events(FmtSpan::FULL)
         .init();
 
-    let  listener = TcpListener::bind("0.0.0.0:2096").await.expect("Couldn't bind to server address!");
+    let listener = TcpListener::bind("0.0.0.0:2096")
+        .await
+        .expect("Couldn't bind to server address!");
 
     let (global_state_updater_tx, global_state_updater_rx) =
         mpsc::channel::<(Envelope, Option<mpsc::Sender<Envelope>>)>(10);
@@ -505,9 +519,9 @@ async fn main() {
 
     let der = include_bytes!("../certificate.p12");
     let cert = Identity::from_pkcs12(der, "elliot").expect("identity to work..");
-    let tls_acceptor =
-        tokio_native_tls::TlsAcceptor::from(native_tls::TlsAcceptor::builder(cert).build().unwrap());
-
+    let tls_acceptor = tokio_native_tls::TlsAcceptor::from(
+        native_tls::TlsAcceptor::builder(cert).build().unwrap(),
+    );
 
     loop {
         let tls_acceptor = tls_acceptor.clone();
@@ -519,18 +533,18 @@ async fn main() {
 
         match tls_acceptor.accept(stream).await {
             Ok(tls_stream) => {
-                tokio::spawn(async move{
-                    establish_and_maintain_each_client_ws_connection(global_state_updater_tx_clone, tls_stream, remote_addr)
-                        .await
+                tokio::spawn(async move {
+                    establish_and_maintain_each_client_ws_connection(
+                        global_state_updater_tx_clone,
+                        tls_stream,
+                        remote_addr,
+                    )
+                    .await
                 });
             }
             Err(err) => {
                 info!("Could not let the client upgrade to tls :( ... at least we have the reason: {:?}", err);
             }
         }
-
-      
-
     }
-
 }

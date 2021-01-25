@@ -2,7 +2,7 @@ use bincode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use std::collections::{ HashSet};
+use std::collections::HashSet;
 use std::net::SocketAddr;
 
 #[derive(Debug, Serialize, Deserialize, Eq, Hash, Clone)]
