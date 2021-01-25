@@ -177,7 +177,7 @@ impl Model {
     fn show_events_in_table(&self) -> Html {
         html!(
             <ul>
-            {for self.event_log.iter().rev().take(self.event_log_length).rev().map(|event| {
+            {for self.event_log.iter().rev().take(self.event_log_length.clone()).rev().map(|event| {
                 html!(<li> {event} </li>)
             })  }
             </ul>

@@ -3,6 +3,7 @@ use tokio::sync::mpsc;
 use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc::Receiver,
+    sync::mpsc::Sender
 };
 
 use tokio_stream::{ StreamExt};
@@ -260,7 +261,8 @@ async fn send_command_to_clients(client_list : HashMap::<uuid::Uuid, (Client, mp
 
 #[instrument]
 async fn server_global_state_manager(
-    mut global_state_update_transceiver: Receiver<(Envelope, Option<mpsc::Sender<Envelope>>)>,
+    mut global_state_update_transceiver: Receiver<(Envelope, Option<mpsc::Sender<Envelope>>)> , 
+        global_state_update_sender: Sender<(Envelope, Option<mpsc::Sender<Envelope>>)>
 ) {
     let mut online_connections = HashMap::<uuid::Uuid, (Client, mpsc::Sender<Envelope>)>::new();
 
@@ -434,12 +436,24 @@ async fn server_global_state_manager(
                                 //pass the message to the receiver
                                 if let EntityDetails::Client(receiver_uuid) = control_message.receiver.entity_detail {
                                     match online_connections.get_mut(&receiver_uuid){
-                                        Some((_client, client_channel)) => {
+                                        Some((client, client_channel)) => {
                                             info!("Trying to re-route the message to the appropriate client.");
                                             match client_channel.send(first_clone.clone()).await
                                             {
                                                 Ok(_) => info!("sent message!"),
-                                                Err(err) => info!("Error: {:?}",  err)
+                                                Err(err) => {
+                                                    info!("Error: {:?}",  err);
+                                                    info!("Need to remove the client from the list of online clients");
+                                                    
+                                                    let connection_closed = Envelope::new(
+                                                        EntityDetails::Server,
+                                                        EntityDetails::Server,
+                                                        None,
+                                                        Command::ClosedConnection(client.user_id)
+                                                    );
+                                                    
+                                                    global_state_update_sender.send((connection_closed, None)).await.expect("This should absolutely not fail... ^_^ I'm so sorry I failed you future self.");
+                                                }
                                             }
                                         }
                                         None => {
@@ -482,9 +496,11 @@ async fn main() {
     let (global_state_updater_tx, global_state_updater_rx) =
         mpsc::channel::<(Envelope, Option<mpsc::Sender<Envelope>>)>(10);
 
+    let global_state_updater_tx_clone = global_state_updater_tx.clone();
+
     tokio::spawn(async {
         info!("setting up a status manager");
-        server_global_state_manager(global_state_updater_rx).await
+        server_global_state_manager(global_state_updater_rx, global_state_updater_tx_clone).await
     });
 
     let der = include_bytes!("../certificate.p12");
