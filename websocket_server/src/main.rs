@@ -139,8 +139,10 @@ async fn establish_and_maintain_each_client_ws_connection(
             control_message = goes_to_specific_ws_client_rx.recv() => {
             match control_message {
                 Some(control_message) => {
-                    match ws_stream.send(tokio_tungstenite::tungstenite::Message::Binary(control_message.serialize())).await {
-                        Ok(_) => {info!("successfully received the control message!")},
+                    match ws_stream.send(tokio_tungstenite::tungstenite::Message::Binary(control_message.clone().serialize())).await {
+                        Ok(_) => {info!("successfully received the control message!: {:?}", control_message.clone());
+                    
+                        },
                         Err(err) => {info!("Couldn't send the message properly due to the following err: {:?}", err)}
                     }
                 }
