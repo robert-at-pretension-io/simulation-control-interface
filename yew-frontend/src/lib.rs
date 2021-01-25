@@ -8,6 +8,7 @@ use wasm_bindgen::JsCast;
 // God knows what evils this crate includes.
 // ^ Thanks I needed that laugh..
 use yew::prelude::*;
+use yew::ComponentLink;
 
 // This local trait is for shared objects between the frontend and the backend
 use models::{Client, Command, EntityDetails, Envelope};
@@ -20,12 +21,7 @@ use std::collections::HashSet;
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{
-    MediaDevices, MediaStream, MediaStreamConstraints, MediaTrackSupportedConstraints,
-    MessageEvent, Navigator, RtcConfiguration, RtcIceConnectionState, RtcIceGatheringState,
-    RtcIceServer, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType,
-    RtcSessionDescriptionInit, RtcSignalingState, WebSocket, Window,
-};
+use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, WebSocket, Window};
 
 use console_error_panic_hook;
 use std::panic;
@@ -41,6 +37,8 @@ static STUN_SERVER: &str = "stun:stun.services.mozilla.com";
 
 struct Model {
     stream: Option<MediaStream>,
+    local_video : NodeRef,
+    remote_video : NodeRef,
     event_log: Vec<String>,
     event_log_length: usize,
     connection_socket_address: Option<SocketAddr>,
@@ -77,6 +75,7 @@ enum Msg {
     LogEvent(String),
     IncreaseLogSize,
     DecreaseLogSize,
+    SetLocalMediaStream,
 
     SetupWebRtc(),
     RtcClientReady(RtcPeerConnection),
@@ -285,41 +284,25 @@ impl Model {
 
     fn create_local_rtc_peer(&mut self) {
         let cloned_link = self.link.clone();
-
-        let onicecandidate_callback = Closure::wrap(Box::new(
-            move |ev: RtcPeerConnectionIceEvent| match ev.candidate() {
-                Some(candidate) => {
-                    cloned_link.send_message(Msg::LogEvent(format!(
-                        "This client made an ice candidate: {:#?}",
-                        candidate.candidate()
-                    )));
-                    cloned_link.send_message(Msg::AddLocalIceCandidate(candidate.candidate()))
-                }
-                None => {}
-            },
-        )
-            as Box<dyn FnMut(RtcPeerConnectionIceEvent)>);
-
-        let mut config = RtcConfiguration::new();
-        // let mut ice_server = RtcIceServer::new();
-
         use serde::{Deserialize, Serialize};
-
-        #[derive(Serialize, Deserialize)]
+                #[derive(Serialize, Deserialize)]
         struct Test {
             urls: String,
         };
-
         let val = JsValue::from_serde(&[Test {
             urls: String::from(STUN_SERVER),
         }])
         .expect("error converting IceServer to JsValue with serde");
-
+        
+        let mut config = RtcConfiguration::new();
         let config = config.ice_servers(&val);
         let client = RtcPeerConnection::new_with_configuration(&config);
 
         match client.clone() {
             Ok(client) => {
+                let onicecandidate_callback = return_ice_callback(cloned_link);
+                // let mut ice_server = RtcIceServer::new();
+
                 self.link
                     .send_message(Msg::LogEvent(format!("successfully setup stun server!")));
                 client.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
@@ -355,6 +338,7 @@ async fn get_local_user_media(link: ComponentLink<Model>, local: RtcPeerConnecti
                 Ok(stream) => {
                     link.send_message(Msg::LogEvent(format!("Alright, able to get user media... should probably do something with it now!")));
                     link.send_message(Msg::StoreMediaStream(stream));
+                    link.send_message(Msg::SetLocalMediaStream)
                 }
                 Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:?}", err))),
             },
@@ -387,6 +371,25 @@ async fn create_webrtc_offer(
     link.send_message(Msg::SendSdpRequestToClient(receiver, offer_sdp));
 }
 
+fn return_ice_callback(cloned_link : ComponentLink<Model>) -> Closure<dyn FnMut(RtcPeerConnectionIceEvent) >{
+
+    Closure::wrap(
+        Box::new(move |ev: RtcPeerConnectionIceEvent| match ev.candidate() {
+            Some(candidate) => {
+                cloned_link.send_message(Msg::LogEvent(format!(
+                    "This client made an ice candidate: {:#?}",
+                    candidate.candidate()
+                )));
+                cloned_link.send_message(Msg::AddLocalIceCandidate(candidate.candidate()))
+            }
+            None => {
+                cloned_link.send_message(Msg::LogEvent(format!(
+                    "Done getting ice candidates"
+                )));
+            }
+        }) as Box<dyn FnMut(RtcPeerConnectionIceEvent)>,)
+}
+
 async fn set_remote_webrtc_offer(
     remote_sdp: String,
     receiver: uuid::Uuid,
@@ -397,19 +400,8 @@ async fn set_remote_webrtc_offer(
 
     let cloned_link = link.clone();
 
-    let onicecandidate_callback =
-        Closure::wrap(
-            Box::new(move |ev: RtcPeerConnectionIceEvent| match ev.candidate() {
-                Some(candidate) => {
-                    cloned_link.send_message(Msg::LogEvent(format!(
-                        "This client made an ice candidate: {:#?}",
-                        candidate.candidate()
-                    )));
-                    cloned_link.send_message(Msg::AddLocalIceCandidate(candidate.candidate()))
-                }
-                None => {}
-            }) as Box<dyn FnMut(RtcPeerConnectionIceEvent)>,
-        );
+    let onicecandidate_callback =return_ice_callback(link.clone());
+        
 
     let mut config = RtcConfiguration::new();
     // let mut ice_server = RtcIceServer::new();
@@ -540,6 +532,8 @@ impl Component for Model {
             local_web_rtc_connection: None,
             link,
             stream: None,
+            local_video : NodeRef::default(),
+            remote_video : NodeRef::default(),
             websocket: None,
             local_ice_candidate: Vec::<String>::new(),
             event_log: Vec::<String>::new(),
@@ -572,6 +566,13 @@ impl Component for Model {
                 self.link.send_message(Msg::LogEvent(format!(
                     "Need to update the local video to include the new stream."
                 )));
+                true
+            }
+            Msg::SetLocalMediaStream => {
+                let val =self.local_video.cast::<HtmlMediaElement>().unwrap();
+                let stream = self.stream.as_ref();
+                val.set_src_object(stream);
+                // self.local_video = val;
                 true
             }
             Msg::OverrideRtcPeer(local) => {
@@ -887,7 +888,12 @@ impl Component for Model {
     fn view(&self) -> Html {
         html! {
             <div>
+            // <h1> {"Local Video"} </h1>
+            <video  width="320" height="240" autoplay="true" ref=self.local_video.clone()> </video>
 
+
+            // <h1> "Remote Video" </h1>
+            <video  width="320" height="240" autoplay="true" ref=self.remote_video.clone()> </video>
 
                 {
 
