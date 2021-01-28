@@ -825,11 +825,13 @@ impl Component for Model {
                 true
             }
             Msg::ReceivedIceCandidate(ice_candidate) => {
-                let local = self.local_web_rtc_connection.unwrap();
+                let local = self.local_web_rtc_connection.clone().unwrap();
 
                 let candidate = RtcIceCandidateInit::new(&ice_candidate);
 
                 local.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&candidate));
+
+                self.link.send_message(Msg::OverrideRtcPeer(local));
 
                 true
             },
