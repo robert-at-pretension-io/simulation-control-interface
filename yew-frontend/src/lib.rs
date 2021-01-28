@@ -333,7 +333,7 @@ impl Model {
     }
 }
 
-async fn get_local_user_media(link: ComponentLink<Model>, local: RtcPeerConnection) {
+async fn get_local_user_media(link: ComponentLink<Model>) {
     let window = web_sys::window().expect("couldn't get window");
 
     let media_devices: MediaDevices = window
@@ -666,9 +666,7 @@ impl Component for Model {
                     .local_web_rtc_connection
                     .clone()
                     .expect("error with unwrapping the local web rtc in setlocalmedia msg ");
-                spawn_local(async move {
-                    get_local_user_media(link, local).await;
-                });
+
                 true
             }
             Msg::ResetPage => {
@@ -749,6 +747,15 @@ impl Component for Model {
             }
             Msg::InitiateWebsocketConnectionProcess => {
                 panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+
+                self.link.send_message(Msg::LogEvent(format!("getting the local webcam stream")));
+                let link = self.link.clone();
+
+                spawn_local(async move {
+                    get_local_user_media(link).await;
+                });
+
                 match WebSocket::new(WEBSOCKET_URL) {
                     Ok(ws) => {
                         let ws = self.setup_websocket_object_callbacks(ws);
