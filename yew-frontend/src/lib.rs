@@ -834,10 +834,10 @@ impl Component for Model {
                 true
             },
             Msg::SendIceCandidate(ice_candidate) => {
-                let partner_id = self.partner.unwrap().user_id;
+                let partner_id = self.partner.clone().unwrap().user_id;
                 
                 let envelope = Envelope::new(
-                    EntityDetails::Client(self.user_id),
+                    EntityDetails::Client(self.user_id.unwrap()),
                     EntityDetails::Client(partner_id),
                     Some(EntityDetails::Server),
                     Command::IceCandidate(ice_candidate.clone())
