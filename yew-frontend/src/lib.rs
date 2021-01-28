@@ -13,7 +13,8 @@ use yew::ComponentLink;
 // This local trait is for shared objects between the frontend and the backend
 use models::{Client, Command, EntityDetails, Envelope};
 
-use std::net::SocketAddr;
+use core::borrow;
+use std::{clone, net::SocketAddr};
 
 use std::collections::HashSet;
 
@@ -21,7 +22,7 @@ use std::collections::HashSet;
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, WebSocket, Window};
+use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpSender, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window};
 
 use console_error_panic_hook;
 use std::panic;
@@ -36,7 +37,7 @@ static WEBSOCKET_URL: &str = "wss://liminalnook.com:2096";
 static STUN_SERVER: &str = "stun:stun.services.mozilla.com";
 
 struct Model {
-    stream: Option<MediaStream>,
+    local_stream: Option<MediaStream>,
     local_video : NodeRef,
     remote_video : NodeRef,
     event_log: Vec<String>,
@@ -56,7 +57,7 @@ struct Model {
 impl Model {
     fn reset_state(&mut self) {
         self.event_log_length = 5;
-        self.stream = None;
+        self.local_stream = None;
         self.username = None;
         self.user_id = None;
         self.connection_socket_address = None;
@@ -304,12 +305,25 @@ impl Model {
                 // let mut ice_server = RtcIceServer::new();
 
                 self.link
-                    .send_message(Msg::LogEvent(format!("successfully setup stun server!")));
+                    .send_message(Msg::LogEvent(format!("successfully setup stun server! ")));
+                self.link
+                        .send_message(Msg::LogEvent(format!("Now to attach the tracks to the stream!")));
                 client.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
 
-                onicecandidate_callback.forget();
 
-                self.link.send_message(Msg::RtcClientReady(client));
+                if let Some(my_stream) = &self.local_stream {
+                    for track in my_stream.clone().get_tracks().to_vec() {
+                        let track = track.dyn_into::<MediaStreamTrack>().unwrap();
+                        RtcPeerConnection::add_track_0(&client,&track, my_stream);
+                    }
+                    onicecandidate_callback.forget();
+                    self.link.send_message(Msg::RtcClientReady(client));
+                }
+                else {
+                    self.link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
+                }
+
+
             }
             Err(err) => self.link.send_message(Msg::LogEvent(format!(
                 "Received the following error: {:?}",
@@ -389,6 +403,21 @@ fn return_ice_callback(cloned_link : ComponentLink<Model>) -> Closure<dyn FnMut(
             }
         }) as Box<dyn FnMut(RtcPeerConnectionIceEvent)>,)
 }
+
+
+fn return_track_added_callback(cloned_link : ComponentLink<Model>) -> Closure<dyn FnMut(RtcTrackEvent) >{
+
+    Closure::wrap(
+        Box::new(move |event : RtcTrackEvent| {
+
+            let track = event.track();
+                cloned_link.send_message(Msg::LogEvent(format!("The remote track: {:?} was added to the RtcPeerConnection", track.id())))
+
+            
+
+        }) as Box<dyn FnMut(RtcTrackEvent)>)
+}
+
 
 async fn set_remote_webrtc_offer(
     remote_sdp: String,
@@ -479,8 +508,16 @@ async fn create_and_set_answer_locally(
     link: ComponentLink<Model>,
 ) {
     link.send_message(Msg::LogEvent(format!(
-        "attempting to create answer to offer..."
+        "attempting to create answer to offer...This is also where the local media stream/tracks will be connected to the RTCPeerConnection"
     )));
+
+    // set_onaddtrack
+
+    let return_track_callback = return_track_added_callback(link.clone());
+
+    local.set_onaddtrack(Some(return_track_callback.as_ref().unchecked_ref()));
+
+    return_track_callback.forget();
 
     let answer = JsFuture::from(local.create_answer())
         .await
@@ -531,7 +568,7 @@ impl Component for Model {
         Model {
             local_web_rtc_connection: None,
             link,
-            stream: None,
+            local_stream: None,
             local_video : NodeRef::default(),
             remote_video : NodeRef::default(),
             websocket: None,
@@ -562,7 +599,7 @@ impl Component for Model {
                 }
             }
             Msg::StoreMediaStream(stream) => {
-                self.stream = Some(stream);
+                self.local_stream = Some(stream);
                 self.link.send_message(Msg::LogEvent(format!(
                     "Need to update the local video to include the new stream."
                 )));
@@ -570,7 +607,7 @@ impl Component for Model {
             }
             Msg::SetLocalMediaStream => {
                 let val =self.local_video.cast::<HtmlMediaElement>().unwrap();
-                let stream = self.stream.as_ref();
+                let stream = self.local_stream.as_ref();
                 val.set_src_object(stream);
                 // self.local_video = val;
                 true
@@ -889,11 +926,11 @@ impl Component for Model {
         html! {
             <div>
             // <h1> {"Local Video"} </h1>
-            <video  width="320" height="240" autoplay="true" ref=self.local_video.clone()> </video>
+            <video  width="320" height="240" autoplay=true controls=true ref=self.local_video.clone()> </video>
 
 
             // <h1> "Remote Video" </h1>
-            <video  width="320" height="240" autoplay="true" ref=self.remote_video.clone()> </video>
+            <video  width="320" height="240" autoplay=true controls=true ref=self.remote_video.clone()> </video>
 
                 {
 
