@@ -22,7 +22,7 @@ use std::collections::HashSet;
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpSender, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window};
+use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpSender, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window};
 
 use console_error_panic_hook;
 use std::panic;
@@ -261,6 +261,9 @@ impl Model {
                                     response,
                                 ));
                             }
+                            Command::IceCandidate(ice_candidate) => {
+                                cloned.send_message(Msg::ReceivedIceCandidate(ice_candidate));
+                            }
                             Command::ClosedConnection(_) => cloned.send_message(Msg::ResetPage),
                             Command::AckClosedConnection(_) => {
                                 cloned.send_message(Msg::EndWebsocketConnection)
@@ -397,6 +400,7 @@ fn return_ice_callback(cloned_link : ComponentLink<Model>) -> Closure<dyn FnMut(
                     candidate.candidate()
                 )));
                 cloned_link.send_message(Msg::AddLocalIceCandidate(candidate.candidate()))
+                
             }
             None => {
                 cloned_link.send_message(Msg::LogEvent(format!(
@@ -644,8 +648,9 @@ impl Component for Model {
                 self.local_ice_candidate.push(candidate.clone());
                 self.link.send_message(Msg::LogEvent(format!(
                     "need to send ice candidate {} to partner...",
-                    candidate
+                    candidate.clone()
                 )));
+                self.link.send_message(Msg::SendIceCandidate(candidate));
                 true
             }
             Msg::ClearLog => {
@@ -819,8 +824,30 @@ impl Component for Model {
 
                 true
             }
-            Msg::ReceivedIceCandidate(_) => false,
-            Msg::SendIceCandidate(_) => false,
+            Msg::ReceivedIceCandidate(ice_candidate) => {
+                let local = self.local_web_rtc_connection.unwrap();
+
+                let candidate = RtcIceCandidateInit::new(&ice_candidate);
+
+                local.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&candidate));
+
+                true
+            },
+            Msg::SendIceCandidate(ice_candidate) => {
+                let partner_id = self.partner.unwrap().user_id;
+                
+                let envelope = Envelope::new(
+                    EntityDetails::Client(self.user_id),
+                    EntityDetails::Client(partner_id),
+                    Some(EntityDetails::Server),
+                    Command::IceCandidate(ice_candidate.clone())
+                );
+
+                self.send_ws_message(envelope);
+
+
+                true
+            },
             Msg::SetLocalWebRtcOffer(offer) => {
                 let local = self
                     .local_web_rtc_connection

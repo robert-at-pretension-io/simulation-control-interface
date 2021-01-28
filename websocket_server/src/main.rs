@@ -309,6 +309,10 @@ async fn server_global_state_manager(
 
                         if control_message.receiver.entity_type == EntityTypes::Server {
                             match control_message.command {
+                        
+                                Command::IceCandidate(_) => {
+                                    info!("The server should not be receiving ice candidates.");
+                                }
 
 
                         Command::Error(error) => {

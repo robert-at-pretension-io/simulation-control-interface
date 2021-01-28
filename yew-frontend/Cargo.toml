@@ -37,6 +37,7 @@ features = [
   "RtcSessionDescriptionInit",
   "RtcPeerConnectionIceEvent",
   "RtcIceCandidate",
+  "RtcIceCandidateInit",
   "RtcDataChannel",
   "RtcDataChannelEvent",
   "MediaDevices",
