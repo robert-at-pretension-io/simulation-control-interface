@@ -69,6 +69,7 @@ impl Model {
 }
 #[derive(Debug, Clone)]
 enum Msg {
+    GetUserMediaPermission,
     UpdateUsername(String),
     SetClient(Client),
     ClearLog,
@@ -352,7 +353,8 @@ async fn get_local_user_media(link: ComponentLink<Model>) {
                 Ok(stream) => {
                     link.send_message(Msg::LogEvent(format!("Alright, able to get user media... should probably do something with it now!")));
                     link.send_message(Msg::StoreMediaStream(stream));
-                    link.send_message(Msg::SetLocalMediaStream)
+                    link.send_message(Msg::SetLocalMediaStream);
+                    link.send_message(Msg::InitiateWebsocketConnectionProcess);
                 }
                 Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:?}", err))),
             },
@@ -586,6 +588,19 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+
+            Msg::GetUserMediaPermission => {
+                panic::set_hook(Box::new(console_error_panic_hook::hook));
+
+
+                self.link.send_message(Msg::LogEvent(format!("getting the local webcam stream")));
+                let link = self.link.clone();
+
+                spawn_local(async move {
+                    get_local_user_media(link).await;
+                });
+                true
+            }
             Msg::ReportRtcDiagnostics() => {
                 if self.local_web_rtc_connection.is_some() {
                     let local = self
@@ -746,15 +761,7 @@ impl Component for Model {
                 true
             }
             Msg::InitiateWebsocketConnectionProcess => {
-                panic::set_hook(Box::new(console_error_panic_hook::hook));
-
-
-                self.link.send_message(Msg::LogEvent(format!("getting the local webcam stream")));
-                let link = self.link.clone();
-
-                spawn_local(async move {
-                    get_local_user_media(link).await;
-                });
+                
 
                 match WebSocket::new(WEBSOCKET_URL) {
                     Ok(ws) => {
@@ -959,7 +966,7 @@ impl Component for Model {
                 {
                     if (!self.states.contains(&State::ConnectedToWebsocketServer)){
                     html!(<button onclick=self.link.callback(|_| {
-                        Msg::InitiateWebsocketConnectionProcess
+                        Msg::GetUserMediaPermission
                     })>
                         {"Click here to connect to the server."}
                     </button>)}
