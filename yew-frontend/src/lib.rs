@@ -829,9 +829,23 @@ impl Component for Model {
 
                 let candidate = RtcIceCandidateInit::new(&ice_candidate);
 
-                local.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&candidate));
+                let link = self.link.clone();
 
-                self.link.send_message(Msg::OverrideRtcPeer(local));
+                spawn_local(async move { 
+
+                    match wasm_bindgen_futures::JsFuture::from(local.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&candidate))).await {
+                        Ok(local) => {
+                            let local = local.dyn_into::<RtcPeerConnection>().expect("Couldn't convert the RtcPeerConnection");
+                            link.send_message(Msg::OverrideRtcPeer(local));
+                            link.send_message(Msg::LogEvent(format!("Successfully added ice candidate from remote peer!")));
+                        }
+                            Err(err) => {link.send_message(Msg::LogEvent(format!("Had the following error trying to reset the local RtcPeerConnection: {:?}", err)));}
+                    }
+
+                    
+    
+
+                 });
 
                 true
             },
