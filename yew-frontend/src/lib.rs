@@ -45,7 +45,7 @@ struct Model {
     connection_socket_address: Option<SocketAddr>,
     user_id: Option<uuid::Uuid>,
     username: Option<String>,
-    partner: Option<Client>,
+    partner: Option<Uuid>,
     link: ComponentLink<Self>,
     websocket: Option<WebSocket>,
     peers: HashSet<Client>,
@@ -836,7 +836,7 @@ impl Component for Model {
                 true
             },
             Msg::SendIceCandidate(ice_candidate) => {
-                let partner_id = self.partner.clone().unwrap().user_id;
+                let partner_id = self.partner.clone().unwrap();
                 
                 let envelope = Envelope::new(
                     EntityDetails::Client(self.user_id.unwrap()),
@@ -865,6 +865,8 @@ impl Component for Model {
                 true
             }
             Msg::MakeSdpRequestToClient(receiver) => {
+                self.partner = Some(receiver);
+
                 let local = self
                     .local_web_rtc_connection
                     .clone()
@@ -940,6 +942,9 @@ impl Component for Model {
                 true
             }
             Msg::MakeSdpResponse(sdp, client) => {
+
+                self.partner = Some(client.clone());
+
                 self.link.send_message(Msg::LogEvent(format!(
                     "Received the following sdp request: {:?} from client {:?}",
                     sdp, client
