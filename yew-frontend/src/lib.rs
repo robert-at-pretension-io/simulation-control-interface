@@ -22,7 +22,7 @@ use std::collections::HashSet;
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpSender, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window};
+use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpSender, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window, RtcRtpTransceiver};
 
 use console_error_panic_hook;
 use std::panic;
@@ -833,7 +833,20 @@ impl Component for Model {
             Msg::ReceivedIceCandidate(ice_candidate) => {
                 let local = self.local_web_rtc_connection.clone().unwrap();
 
-                let init = RtcIceCandidateInit::new(&ice_candidate);
+                let mut mid  = String::new();
+
+                // Right here is where we get the transceiver from the local web_rtc connection. With it we can get the media id (MID). Then the RtcIceCandidate it is initialized with the MID. I hate not knowing the abstractions that are assumed to be understood with a third party libraries 😭
+
+                for transceiver in local.get_transceivers().to_vec() {
+                    let transceiver = transceiver.dyn_into::<RtcRtpTransceiver>().unwrap();
+
+                     let val = transceiver.mid().clone().unwrap();
+
+                     mid = val;
+                }
+
+                let mut init = RtcIceCandidateInit::new(&ice_candidate);
+                let init = init.sdp_mid(Some(&mid));
 
                 let candidate = RtcIceCandidate::new(&init).unwrap();
 
