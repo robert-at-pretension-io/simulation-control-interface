@@ -22,7 +22,7 @@ use std::collections::HashSet;
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpSender, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window};
+use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpSender, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window};
 
 use console_error_panic_hook;
 use std::panic;
@@ -378,7 +378,13 @@ async fn create_webrtc_offer(
     receiver: uuid::Uuid,
     local: RtcPeerConnection,
 ) {
-    let offer = JsFuture::from(local.create_offer())
+
+    let mut offer_options =   RtcOfferOptions::new();
+    
+    offer_options.offer_to_receive_audio(true).offer_to_receive_video(true);
+
+
+    let offer = JsFuture::from(local.create_offer_with_rtc_offer_options(&offer_options))
         .await
         .expect("error creating offer.");
 
@@ -521,7 +527,7 @@ async fn create_and_set_answer_locally(
 
     let return_track_callback = return_track_added_callback(link.clone());
 
-    local.set_onaddtrack(Some(return_track_callback.as_ref().unchecked_ref()));
+    local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
 
     return_track_callback.forget();
 
@@ -827,13 +833,17 @@ impl Component for Model {
             Msg::ReceivedIceCandidate(ice_candidate) => {
                 let local = self.local_web_rtc_connection.clone().unwrap();
 
-                let candidate = RtcIceCandidateInit::new(&ice_candidate);
+                let init = RtcIceCandidateInit::new(&ice_candidate);
+
+                let candidate = RtcIceCandidate::new(&init).unwrap();
+
+                // let candidate = RtcIceCandidate::set_candidate(&ice_candidate);
 
                 let link = self.link.clone();
 
                 spawn_local(async move { 
 
-                    match wasm_bindgen_futures::JsFuture::from(local.add_ice_candidate_with_opt_rtc_ice_candidate_init(Some(&candidate))).await {
+                    match wasm_bindgen_futures::JsFuture::from(local.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate))).await {
                         Ok(local) => {
                             let local = local.dyn_into::<RtcPeerConnection>().expect("Couldn't convert the RtcPeerConnection");
                             link.send_message(Msg::OverrideRtcPeer(local));
