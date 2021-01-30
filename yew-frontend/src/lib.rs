@@ -615,7 +615,7 @@ impl Component for Model {
             local_web_rtc_connection: None,
             link,
             local_stream: None,
-            remote_stream: None,
+            remote_stream: Some(MediaStream::new().unwrap()),
             local_video : NodeRef::default(),
             remote_video : NodeRef::default(),
             websocket: None,
