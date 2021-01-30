@@ -38,6 +38,7 @@ static STUN_SERVER: &str = "stun:stun.services.mozilla.com";
 
 struct Model {
     local_stream: Option<MediaStream>,
+    remote_stream: Option<MediaStream>,
     local_video : NodeRef,
     remote_video : NodeRef,
     event_log: Vec<String>,
@@ -88,6 +89,7 @@ enum Msg {
     SetLocalWebRtcOffer(String),
 
     SetLocalMedia,
+    AddRemoteMediaStream(MediaStreamTrack),
 
     MakeSdpResponse(String, uuid::Uuid),
     SendSdpRequestToClient(Uuid, String),
@@ -305,15 +307,20 @@ impl Model {
 
         match client.clone() {
             Ok(client) => {
-                let onicecandidate_callback = return_ice_callback(cloned_link);
                 // let mut ice_server = RtcIceServer::new();
 
                 self.link
                     .send_message(Msg::LogEvent(format!("successfully setup stun server! ")));
                 self.link
                         .send_message(Msg::LogEvent(format!("Now to attach the tracks to the stream!")));
-                client.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
 
+                let onicecandidate_callback = return_ice_callback(cloned_link.clone());
+                client.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
+                onicecandidate_callback.forget();
+
+                let return_track_callback = return_track_added_callback(cloned_link.clone());
+                client.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
+                return_track_callback.forget();
 
                 if let Some(my_stream) = &self.local_stream {
                     for track in my_stream.clone().get_tracks().to_vec() {
@@ -321,7 +328,7 @@ impl Model {
                         RtcPeerConnection::add_track_0(&client,&track, my_stream);
                     }
                     self.link.send_message(Msg::LogEvent(format!("Added the local tracks to the WebRtc Connection")));
-                    onicecandidate_callback.forget();
+                    
                     self.link.send_message(Msg::RtcClientReady(client));
                 }
                 else {
@@ -413,6 +420,7 @@ fn return_ice_callback(cloned_link : ComponentLink<Model>) -> Closure<dyn FnMut(
                 cloned_link.send_message(Msg::LogEvent(format!(
                     "Done getting ice candidates"
                 )));
+                cloned_link.send_message(Msg::ReportRtcDiagnostics());
             }
         }) as Box<dyn FnMut(RtcPeerConnectionIceEvent)>,)
 }
@@ -424,8 +432,9 @@ fn return_track_added_callback(cloned_link : ComponentLink<Model>) -> Closure<dy
         Box::new(move |event : RtcTrackEvent| {
 
             let track = event.track();
-                cloned_link.send_message(Msg::LogEvent(format!("The remote track: {:?} was added to the RtcPeerConnection", track)))
+                cloned_link.send_message(Msg::LogEvent(format!("The remote track: {:?} was added to the RtcPeerConnection", track)));
 
+            cloned_link.send_message(Msg::AddRemoteMediaStream(track));
             
 
         }) as Box<dyn FnMut(RtcTrackEvent)>)
@@ -442,7 +451,6 @@ async fn set_remote_webrtc_offer(
 
     let cloned_link = link.clone();
 
-    let onicecandidate_callback =return_ice_callback(link.clone());
         
 
     let mut config = RtcConfiguration::new();
@@ -465,6 +473,9 @@ async fn set_remote_webrtc_offer(
 
     match client.clone() {
         Ok(local) => {
+            let onicecandidate_callback =return_ice_callback(link.clone());
+
+
             link.send_message(Msg::LogEvent(format!("successfully setup stun server!")));
             local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
 
@@ -604,6 +615,7 @@ impl Component for Model {
             local_web_rtc_connection: None,
             link,
             local_stream: None,
+            remote_stream: None,
             local_video : NodeRef::default(),
             remote_video : NodeRef::default(),
             websocket: None,
@@ -657,7 +669,14 @@ impl Component for Model {
                 let val =self.local_video.cast::<HtmlMediaElement>().unwrap();
                 let stream = self.local_stream.as_ref();
                 val.set_src_object(stream);
-                // self.local_video = val;
+                true
+            }
+            Msg::AddRemoteMediaStream(track) => {
+                let val =self.remote_video.cast::<HtmlMediaElement>().unwrap();
+                let stream = self.remote_stream.clone().unwrap();
+                stream.add_track(&track);
+                val.set_src_object(Some(&stream));
+                self.remote_stream = Some(stream);
                 true
             }
             Msg::OverrideRtcPeer(local) => {
