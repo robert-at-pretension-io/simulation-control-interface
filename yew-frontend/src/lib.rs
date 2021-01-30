@@ -423,7 +423,7 @@ fn return_track_added_callback(cloned_link : ComponentLink<Model>) -> Closure<dy
         Box::new(move |event : RtcTrackEvent| {
 
             let track = event.track();
-                cloned_link.send_message(Msg::LogEvent(format!("The remote track: {:?} was added to the RtcPeerConnection", track.id())))
+                cloned_link.send_message(Msg::LogEvent(format!("The remote track: {:?} was added to the RtcPeerConnection", track)))
 
             
 
@@ -434,10 +434,9 @@ fn return_track_added_callback(cloned_link : ComponentLink<Model>) -> Closure<dy
 async fn set_remote_webrtc_offer(
     remote_sdp: String,
     receiver: uuid::Uuid,
-    local: RtcPeerConnection,
     link: ComponentLink<Model>,
 ) {
-    // completely ignore the old localRtcPeerConnection
+    
 
     let cloned_link = link.clone();
 
@@ -468,6 +467,12 @@ async fn set_remote_webrtc_offer(
             local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
 
             onicecandidate_callback.forget();
+
+            let return_track_callback = return_track_added_callback(link.clone());
+
+            local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
+        
+            return_track_callback.forget();
 
             // This is now where the code for sending a response goes...
 
@@ -996,7 +1001,7 @@ impl Component for Model {
                     .expect("error in MakeSdpReponse msg");
                 let link = self.link.clone();
 
-                spawn_local(async move { set_remote_webrtc_offer(sdp, client, local, link).await });
+                spawn_local(async move { set_remote_webrtc_offer(sdp, client, link).await });
 
                 true
             }
