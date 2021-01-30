@@ -320,6 +320,7 @@ impl Model {
                         let track = track.dyn_into::<MediaStreamTrack>().unwrap();
                         RtcPeerConnection::add_track_0(&client,&track, my_stream);
                     }
+                    self.link.send_message(Msg::LogEvent(format!("Added the local tracks to the WebRtc Connection")));
                     onicecandidate_callback.forget();
                     self.link.send_message(Msg::RtcClientReady(client));
                 }
@@ -434,6 +435,7 @@ fn return_track_added_callback(cloned_link : ComponentLink<Model>) -> Closure<dy
 async fn set_remote_webrtc_offer(
     remote_sdp: String,
     receiver: uuid::Uuid,
+    local_stream : Option<MediaStream>,
     link: ComponentLink<Model>,
 ) {
     
@@ -486,7 +488,7 @@ async fn set_remote_webrtc_offer(
                     link.send_message(Msg::LogEvent(format!(
                         "Successfully set the remote webrtc offer!"
                     )));
-                    create_and_set_answer_locally(receiver, local, link).await
+                    create_and_set_answer_locally(receiver, local, local_stream.clone() ,link).await
                 }
                 Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:?}", err))),
             }
@@ -522,19 +524,35 @@ async fn set_remote_webrtc_answer(
 async fn create_and_set_answer_locally(
     receiver: uuid::Uuid,
     local: RtcPeerConnection,
+    local_stream : Option<MediaStream>,
     link: ComponentLink<Model>,
 ) {
     link.send_message(Msg::LogEvent(format!(
         "attempting to create answer to offer...This is also where the local media stream/tracks will be connected to the RTCPeerConnection"
     )));
 
-    // set_onaddtrack
+    
+
+    if let Some(my_stream) = &local_stream {
+        for track in my_stream.clone().get_tracks().to_vec() {
+            let track = track.dyn_into::<MediaStreamTrack>().unwrap();
+            RtcPeerConnection::add_track_0(&local,&track, my_stream);
+        }
+        link.send_message(Msg::LogEvent(format!("Added the local tracks")));
+    }
+    else {
+        link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
+    }
 
     let return_track_callback = return_track_added_callback(link.clone());
 
     local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
 
     return_track_callback.forget();
+
+    // let mut offer_options =   RtcOfferOptions::new();
+    
+    // offer_options.offer_to_receive_audio(true).offer_to_receive_video(true);
 
     let answer = JsFuture::from(local.create_answer())
         .await
@@ -1000,8 +1018,9 @@ impl Component for Model {
                     .clone()
                     .expect("error in MakeSdpReponse msg");
                 let link = self.link.clone();
+                let local_stream = self.local_stream.clone();
 
-                spawn_local(async move { set_remote_webrtc_offer(sdp, client, link).await });
+                spawn_local(async move { set_remote_webrtc_offer(sdp, client, local_stream, link).await });
 
                 true
             }
