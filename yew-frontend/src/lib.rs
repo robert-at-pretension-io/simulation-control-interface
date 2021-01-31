@@ -34,6 +34,8 @@ use web_sys::{
 use console_error_panic_hook;
 use std::panic;
 
+use regex::Regex;
+
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 enum State {
     ConnectedToWebsocketServer,
@@ -592,10 +594,14 @@ async fn create_and_set_answer_locally(
             .expect("error making sdp answer...")
             .as_string()
             .expect("error converting to string");
-        //console_log!("pc2: answer {:?}", answer_sdp);
+       
+        let re = Regex::new(r"recvonly").unwrap();
+        let string: String = re.replace_all(&answer_sdp, "sendrecv").into();
+
+
 
         let mut answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
-        answer_obj.sdp(&answer_sdp);
+        answer_obj.sdp(&string);
         let sld_promise = local.set_local_description(&answer_obj);
         match JsFuture::from(sld_promise).await {
             Ok(_) => {
