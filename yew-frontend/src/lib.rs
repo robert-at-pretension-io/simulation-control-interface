@@ -634,14 +634,26 @@ impl Component for Model {
         match msg {
 
             Msg::CloseWebRtcConnection => {
-                match self.local_web_rtc_connection {
+                match self.local_web_rtc_connection.as_ref() {
                     Some(connection) => {
                         connection.close();
                     }
                     None => {
-                        self.link.send_message(Msg::LogEvent(format!("There is no local webrtc connection to close."));)
+                        self.link.send_message(Msg::LogEvent(format!("There is no local webrtc connection to close.")));
                     }
                 }
+
+                let val =self.remote_video.cast::<HtmlMediaElement>().unwrap();
+                let mut stream = self.remote_stream.clone().unwrap();
+                for track in stream.clone().get_tracks().to_vec() {
+                    let track = track.dyn_into::<MediaStreamTrack>().unwrap();
+                    self.link.send_message(Msg::LogEvent(format!("Removing the track {:?} from the remote stream", track)));
+                    stream.remove_track(&track);
+                    
+                }
+                val.set_src_object(Some(&stream));
+                self.remote_stream = Some(stream);
+
                 true
             }
 
@@ -751,16 +763,7 @@ impl Component for Model {
             Msg::ResetPage => {
                 self.reset_state();
 
-                let val =self.remote_video.cast::<HtmlMediaElement>().unwrap();
-                let mut stream = self.remote_stream.clone().unwrap();
-                for track in stream.clone().get_tracks().to_vec() {
-                    let track = track.dyn_into::<MediaStreamTrack>().unwrap();
-                    self.link.send_message(Msg::LogEvent(format!("Removing the track {:?} from the remote stream", track)));
-                    stream.remove_track(&track);
-                    
-                }
-                val.set_src_object(Some(&stream));
-                self.remote_stream = Some(stream);
+                self.link.send_message(Msg::CloseWebRtcConnection);
 
                 true
             }
