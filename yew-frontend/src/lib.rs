@@ -931,7 +931,7 @@ impl Component for Model {
 
                     let transceiver = transceiver.dyn_into::<RtcRtpTransceiver>().unwrap();
 
-
+                    self.link.send_message(Msg::LogEvent(format!("The transceiver has the remote track id: {:?}" , transceiver.get_remote_track_id())));
 
                     
                     let link = self.link.clone();
