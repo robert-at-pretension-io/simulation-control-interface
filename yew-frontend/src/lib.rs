@@ -400,13 +400,17 @@ async fn create_webrtc_offer(
     receiver: uuid::Uuid,
     local: RtcPeerConnection,
 ) {
-    let mut offer_options = RtcOfferOptions::new();
+    // let mut offer_options = RtcOfferOptions::new();
 
-    offer_options
-        .offer_to_receive_audio(true)
-        .offer_to_receive_video(true);
+    // offer_options
+    //     .offer_to_receive_audio(true)
+    //     .offer_to_receive_video(true);
 
-    let offer = JsFuture::from(local.create_offer_with_rtc_offer_options(&offer_options))
+    // let offer = JsFuture::from(local.create_offer_with_rtc_offer_options(&offer_options))
+    //     .await
+    //     .expect("error creating offer.");
+
+        let offer = JsFuture::from(local.create_offer())
         .await
         .expect("error creating offer.");
 
