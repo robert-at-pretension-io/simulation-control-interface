@@ -325,7 +325,9 @@ impl Model {
                 if let Some(my_stream) = &self.local_stream {
                     for track in my_stream.clone().get_tracks().to_vec() {
                         let track = track.dyn_into::<MediaStreamTrack>().unwrap();
-                        RtcPeerConnection::add_track_0(&client,&track, my_stream);
+                        let transceiver : RtcRtpTransceiver = client.add_transceiver_with_media_stream_track(&track);
+
+                        transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
                     }
                     self.link.send_message(Msg::LogEvent(format!("Added the local tracks to the WebRtc Connection")));
                     
