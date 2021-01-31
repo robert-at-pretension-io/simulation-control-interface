@@ -84,6 +84,7 @@ enum Msg {
     RtcClientReady(RtcPeerConnection),
     StoreMediaStream(MediaStream),
     ReceivedIceCandidate(String),
+    AddRemoteIceCandidate(RtcIceCandidate),
     SendIceCandidate(String),
     AddLocalIceCandidate(String),
     SetLocalWebRtcOffer(String),
@@ -934,13 +935,8 @@ impl Component for Model {
                 true
             }
             Msg::ReceivedIceCandidate(ice_candidate) => {
-                let local = self.local_web_rtc_connection.clone().unwrap();
 
-                let mut mid : Option<String>  = None;
-
-                // Right here is where we get the transceiver from the local web_rtc connection. With it we can get the media id (MID). Then the RtcIceCandidate it is initialized with the MID. I hate not knowing the abstractions that are assumed to be understood with a third party libraries 😭
-
-                let mut init = RtcIceCandidateInit::new(&ice_candidate);
+              
                 
 
                 for transceiver in local.get_transceivers().to_vec() {
@@ -956,8 +952,12 @@ impl Component for Model {
                      match transceiver.mid().clone()
                      {
                          Some(mid) => {
+
+                            let mut init = RtcIceCandidateInit::new(&ice_candidate);
                              init.sdp_mid(Some(&mid));
                              link.send_message(Msg::LogEvent(format!("Set the mid value for the following transceiver: {:?}", transceiver)));
+                             let candidate = RtcIceCandidate::new(&init).unwrap();
+                             link.send_message(Msg::AddRemoteIceCandidate(candidate));
                          }
                          None => {
                              link.send_message(Msg::LogEvent(format!("Wasn't able to set the mid value for the following transceiver: {:?}", transceiver)));
@@ -969,9 +969,17 @@ impl Component for Model {
 
 
 
-                let candidate = RtcIceCandidate::new(&init).unwrap();
+                
 
 
+
+                
+
+                true
+            },
+            Msg::AddRemoteIceCandidate(candidate) => {
+
+                let local = self.local_web_rtc_connection.unwrap();
                 let link = self.link.clone();
 
                 spawn_local(async move { 
@@ -989,9 +997,9 @@ impl Component for Model {
     
 
                  });
+                 true
 
-                true
-            },
+            }
             Msg::SendIceCandidate(ice_candidate) => {
                 let partner_id = self.partner.clone().unwrap();
                 
