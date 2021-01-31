@@ -59,6 +59,9 @@ impl Model {
     fn reset_state(&mut self) {
         self.event_log_length = 5;
         self.local_stream = None;
+        self.remote_stream = None;
+        self.remote_video = NodeRef::default();
+        self.local_video = NodeRef::default();
         self.username = None;
         self.user_id = None;
         self.connection_socket_address = None;
