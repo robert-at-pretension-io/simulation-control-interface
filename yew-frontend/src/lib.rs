@@ -553,7 +553,7 @@ async fn create_and_set_answer_locally(
         link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
     }
 
-    local.
+    
 
     let return_track_callback = return_track_added_callback(link.clone());
     local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
