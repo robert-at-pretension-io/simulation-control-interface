@@ -86,6 +86,7 @@ enum Msg {
     SendIceCandidate(String),
     AddLocalIceCandidate(String),
     SetLocalWebRtcOffer(String),
+    CloseWebRtcConnection,
 
     SetLocalMedia,
     AddRemoteMediaStream(MediaStreamTrack),
@@ -632,6 +633,18 @@ impl Component for Model {
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
 
+            Msg::CloseWebRtcConnection => {
+                match self.local_web_rtc_connection {
+                    Some(connection) => {
+                        connection.close();
+                    }
+                    None => {
+                        self.link.send_message(Msg::LogEvent(format!("There is no local webrtc connection to close."));)
+                    }
+                }
+                true
+            }
+
             Msg::GetUserMediaPermission => {
                 panic::set_hook(Box::new(console_error_panic_hook::hook));
 
@@ -739,10 +752,12 @@ impl Component for Model {
                 self.reset_state();
 
                 let val =self.remote_video.cast::<HtmlMediaElement>().unwrap();
-                let stream = self.remote_stream.clone().unwrap();
+                let mut stream = self.remote_stream.clone().unwrap();
                 for track in stream.clone().get_tracks().to_vec() {
                     let track = track.dyn_into::<MediaStreamTrack>().unwrap();
+                    self.link.send_message(Msg::LogEvent(format!("Removing the track {:?} from the remote stream", track)));
                     stream.remove_track(&track);
+                    
                 }
                 val.set_src_object(Some(&stream));
                 self.remote_stream = Some(stream);
@@ -1115,6 +1130,11 @@ impl Component for Model {
                                 Msg::CloseWebsocketConnection
                             })>
                                 {"Disconnect"}
+                            </button>
+                            <button onclick=self.link.callback(|_| {
+                                Msg::CloseWebRtcConnection
+                            })>
+                                {"Close WebRtcConnection"}
                             </button>
 
                             </div>)
