@@ -141,7 +141,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                 Some(control_message) => {
                     match ws_stream.send(tokio_tungstenite::tungstenite::Message::Binary(control_message.clone().serialize())).await {
                         Ok(_) => {info!("successfully received the control message!: {:?}", control_message.clone());
-                    
+
                         },
                         Err(err) => {info!("Couldn't send the message properly due to the following err: {:?}", err)}
                     }
@@ -309,7 +309,7 @@ async fn server_global_state_manager(
 
                         if control_message.receiver.entity_type == EntityTypes::Server {
                             match control_message.command {
-                        
+
                                 Command::IceCandidate(_) => {
                                     info!("The server should not be receiving ice candidates.");
                                 }

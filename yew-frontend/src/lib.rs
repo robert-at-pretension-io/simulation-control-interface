@@ -22,7 +22,14 @@ use std::collections::HashSet;
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver, RtcRtpSender, RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window};
+use web_sys::{
+    Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack,
+    MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate,
+    RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer,
+    RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver, RtcRtpSender,
+    RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit,
+    RtcSignalingState, RtcTrackEvent, WebSocket, Window,
+};
 
 use console_error_panic_hook;
 use std::panic;
@@ -39,8 +46,8 @@ static STUN_SERVER: &str = "stun:stun.services.mozilla.com";
 struct Model {
     local_stream: Option<MediaStream>,
     remote_stream: Option<MediaStream>,
-    local_video : NodeRef,
-    remote_video : NodeRef,
+    local_video: NodeRef,
+    remote_video: NodeRef,
     event_log: Vec<String>,
     event_log_length: usize,
     connection_socket_address: Option<SocketAddr>,
@@ -294,7 +301,7 @@ impl Model {
     fn create_local_rtc_peer(&mut self) {
         let cloned_link = self.link.clone();
         use serde::{Deserialize, Serialize};
-                #[derive(Serialize, Deserialize)]
+        #[derive(Serialize, Deserialize)]
         struct Test {
             urls: String,
         };
@@ -302,7 +309,7 @@ impl Model {
             urls: String::from(STUN_SERVER),
         }])
         .expect("error converting IceServer to JsValue with serde");
-        
+
         let mut config = RtcConfiguration::new();
         let config = config.ice_servers(&val);
         let client = RtcPeerConnection::new_with_configuration(&config);
@@ -313,8 +320,9 @@ impl Model {
 
                 self.link
                     .send_message(Msg::LogEvent(format!("successfully setup stun server! ")));
-                self.link
-                        .send_message(Msg::LogEvent(format!("Now to attach the tracks to the stream!")));
+                self.link.send_message(Msg::LogEvent(format!(
+                    "Now to attach the tracks to the stream!"
+                )));
 
                 let onicecandidate_callback = return_ice_callback(cloned_link.clone());
                 client.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
@@ -327,19 +335,19 @@ impl Model {
                 if let Some(my_stream) = &self.local_stream {
                     for track in my_stream.clone().get_tracks().to_vec() {
                         let track = track.dyn_into::<MediaStreamTrack>().unwrap();
-                        let transceiver : RtcRtpTransceiver = client.add_transceiver_with_media_stream_track(&track);
+                        let transceiver: RtcRtpTransceiver =
+                            client.add_transceiver_with_media_stream_track(&track);
 
                         transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
                     }
-                    self.link.send_message(Msg::LogEvent(format!("Added the local tracks to the WebRtc Connection")));
-                    
+                    self.link.send_message(Msg::LogEvent(format!(
+                        "Added the local tracks to the WebRtc Connection"
+                    )));
+
                     self.link.send_message(Msg::RtcClientReady(client));
-                }
-                else {
+                } else {
                     self.link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
                 }
-
-
             }
             Err(err) => self.link.send_message(Msg::LogEvent(format!(
                 "Received the following error: {:?}",
@@ -390,11 +398,11 @@ async fn create_webrtc_offer(
     receiver: uuid::Uuid,
     local: RtcPeerConnection,
 ) {
+    let mut offer_options = RtcOfferOptions::new();
 
-    let mut offer_options =   RtcOfferOptions::new();
-    
-    offer_options.offer_to_receive_audio(true).offer_to_receive_video(true);
-
+    offer_options
+        .offer_to_receive_audio(true)
+        .offer_to_receive_video(true);
 
     let offer = JsFuture::from(local.create_offer_with_rtc_offer_options(&offer_options))
         .await
@@ -408,8 +416,9 @@ async fn create_webrtc_offer(
     link.send_message(Msg::SendSdpRequestToClient(receiver, offer_sdp));
 }
 
-fn return_ice_callback(cloned_link : ComponentLink<Model>) -> Closure<dyn FnMut(RtcPeerConnectionIceEvent) >{
-
+fn return_ice_callback(
+    cloned_link: ComponentLink<Model>,
+) -> Closure<dyn FnMut(RtcPeerConnectionIceEvent)> {
     Closure::wrap(
         Box::new(move |ev: RtcPeerConnectionIceEvent| match ev.candidate() {
             Some(candidate) => {
@@ -418,44 +427,36 @@ fn return_ice_callback(cloned_link : ComponentLink<Model>) -> Closure<dyn FnMut(
                     candidate.candidate()
                 )));
                 cloned_link.send_message(Msg::AddLocalIceCandidate(candidate.candidate()))
-                
             }
             None => {
-                cloned_link.send_message(Msg::LogEvent(format!(
-                    "Done getting ice candidates"
-                )));
+                cloned_link.send_message(Msg::LogEvent(format!("Done getting ice candidates")));
                 cloned_link.send_message(Msg::ReportRtcDiagnostics());
             }
-        }) as Box<dyn FnMut(RtcPeerConnectionIceEvent)>,)
+        }) as Box<dyn FnMut(RtcPeerConnectionIceEvent)>,
+    )
 }
 
+fn return_track_added_callback(
+    cloned_link: ComponentLink<Model>,
+) -> Closure<dyn FnMut(RtcTrackEvent)> {
+    Closure::wrap(Box::new(move |event: RtcTrackEvent| {
+        let track = event.track();
+        cloned_link.send_message(Msg::LogEvent(format!(
+            "The remote track: {:?} was added to the RtcPeerConnection",
+            track
+        )));
 
-fn return_track_added_callback(cloned_link : ComponentLink<Model>) -> Closure<dyn FnMut(RtcTrackEvent) >{
-
-    Closure::wrap(
-        Box::new(move |event : RtcTrackEvent| {
-
-            let track = event.track();
-                cloned_link.send_message(Msg::LogEvent(format!("The remote track: {:?} was added to the RtcPeerConnection", track)));
-
-            cloned_link.send_message(Msg::AddRemoteMediaStream(track));
-            
-
-        }) as Box<dyn FnMut(RtcTrackEvent)>)
+        cloned_link.send_message(Msg::AddRemoteMediaStream(track));
+    }) as Box<dyn FnMut(RtcTrackEvent)>)
 }
-
 
 async fn set_remote_webrtc_offer(
     remote_sdp: String,
     receiver: uuid::Uuid,
-    local_stream : Option<MediaStream>,
+    local_stream: Option<MediaStream>,
     link: ComponentLink<Model>,
 ) {
-    
-
     let cloned_link = link.clone();
-
-        
 
     let mut config = RtcConfiguration::new();
     // let mut ice_server = RtcIceServer::new();
@@ -477,11 +478,9 @@ async fn set_remote_webrtc_offer(
 
     match client.clone() {
         Ok(local) => {
-
-
             link.send_message(Msg::LogEvent(format!("successfully setup stun server!")));
 
-            let onicecandidate_callback =return_ice_callback(link.clone());
+            let onicecandidate_callback = return_ice_callback(link.clone());
             local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
             onicecandidate_callback.forget();
 
@@ -501,7 +500,7 @@ async fn set_remote_webrtc_offer(
                     link.send_message(Msg::LogEvent(format!(
                         "Successfully set the remote webrtc offer!"
                     )));
-                    create_and_set_answer_locally(receiver, local, local_stream.clone() ,link).await
+                    create_and_set_answer_locally(receiver, local, local_stream.clone(), link).await
                 }
                 Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:?}", err))),
             }
@@ -530,11 +529,9 @@ async fn set_remote_webrtc_answer(
                 "Successfully set the remote webrtc answer!"
             )));
 
-            link.send_message(Msg::LogEvent(format!("Attempting to add the remote sender to the remote_video element")));
-
-
-
-
+            link.send_message(Msg::LogEvent(format!(
+                "Attempting to add the remote sender to the remote_video element"
+            )));
         }
         Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:?}", err))),
     }
@@ -545,54 +542,46 @@ async fn set_remote_webrtc_answer(
                 link.send_message(Msg::AddRemoteMediaStream(receiver.track()));
             }
             Err(err) => {
-                link.send_message(Msg::LogEvent(format!("Received the following error: {:?}", err)));
+                link.send_message(Msg::LogEvent(format!(
+                    "Received the following error: {:?}",
+                    err
+                )));
             }
         }
     }
-
 }
 
 async fn create_and_set_answer_locally(
     receiver: uuid::Uuid,
     local: RtcPeerConnection,
-    local_stream : Option<MediaStream>,
+    local_stream: Option<MediaStream>,
     link: ComponentLink<Model>,
 ) {
     link.send_message(Msg::LogEvent(format!(
         "attempting to create answer to offer...This is also where the local media stream/tracks will be connected to the RTCPeerConnection"
     )));
 
-    
-
     if let Some(my_stream) = &local_stream {
         for track in my_stream.clone().get_tracks().to_vec() {
             let track = track.dyn_into::<MediaStreamTrack>().unwrap();
-            
 
-            let transceiver : RtcRtpTransceiver = local.add_transceiver_with_media_stream_track(&track);
+            let transceiver: RtcRtpTransceiver =
+                local.add_transceiver_with_media_stream_track(&track);
 
             transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
-
-
         }
         link.send_message(Msg::LogEvent(format!("Added the local tracks")));
-    }
-    else {
+    } else {
         link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
     }
-
-    
 
     let return_track_callback = return_track_added_callback(link.clone());
     local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
     return_track_callback.forget();
 
-    let onicecandidate_callback =return_ice_callback(link.clone());
+    let onicecandidate_callback = return_ice_callback(link.clone());
     local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
     onicecandidate_callback.forget();
-
-
-
 
     let answer = JsFuture::from(local.create_answer())
         .await
@@ -645,8 +634,8 @@ impl Component for Model {
             link,
             local_stream: None,
             remote_stream: Some(MediaStream::new().unwrap()),
-            local_video : NodeRef::default(),
-            remote_video : NodeRef::default(),
+            local_video: NodeRef::default(),
+            remote_video: NodeRef::default(),
             websocket: None,
             local_ice_candidate: Vec::<String>::new(),
             event_log: Vec::<String>::new(),
@@ -664,7 +653,7 @@ impl Component for Model {
         match msg {
             Msg::MaxLogSize => {
                 self.event_log_length = self.event_log.len();
-                
+
                 true
             }
 
@@ -674,17 +663,21 @@ impl Component for Model {
                         connection.close();
                     }
                     None => {
-                        self.link.send_message(Msg::LogEvent(format!("There is no local webrtc connection to close.")));
+                        self.link.send_message(Msg::LogEvent(format!(
+                            "There is no local webrtc connection to close."
+                        )));
                     }
                 }
 
-                let val =self.remote_video.cast::<HtmlMediaElement>().unwrap();
+                let val = self.remote_video.cast::<HtmlMediaElement>().unwrap();
                 let mut stream = self.remote_stream.clone().unwrap();
                 for track in stream.clone().get_tracks().to_vec() {
                     let track = track.dyn_into::<MediaStreamTrack>().unwrap();
-                    self.link.send_message(Msg::LogEvent(format!("Removing the track {:?} from the remote stream", track)));
+                    self.link.send_message(Msg::LogEvent(format!(
+                        "Removing the track {:?} from the remote stream",
+                        track
+                    )));
                     stream.remove_track(&track);
-                    
                 }
                 val.set_src_object(Some(&stream));
                 self.remote_stream = Some(stream);
@@ -695,8 +688,8 @@ impl Component for Model {
             Msg::GetUserMediaPermission => {
                 panic::set_hook(Box::new(console_error_panic_hook::hook));
 
-
-                self.link.send_message(Msg::LogEvent(format!("getting the local webcam stream")));
+                self.link
+                    .send_message(Msg::LogEvent(format!("getting the local webcam stream")));
                 let link = self.link.clone();
 
                 spawn_local(async move {
@@ -724,14 +717,16 @@ impl Component for Model {
                 true
             }
             Msg::SetLocalMediaStream => {
-                let val =self.local_video.cast::<HtmlMediaElement>().unwrap();
+                let val = self.local_video.cast::<HtmlMediaElement>().unwrap();
                 let stream = self.local_stream.as_ref();
                 val.set_src_object(stream);
                 true
             }
             Msg::AddRemoteMediaStream(track) => {
-                self.link.send_message(Msg::LogEvent(format!("Added remote track to the local video element")));
-                let val =self.remote_video.cast::<HtmlMediaElement>().unwrap();
+                self.link.send_message(Msg::LogEvent(format!(
+                    "Added remote track to the local video element"
+                )));
+                let val = self.remote_video.cast::<HtmlMediaElement>().unwrap();
                 let stream = self.remote_stream.clone().unwrap();
                 stream.add_track(&track);
                 val.set_src_object(Some(&stream));
@@ -875,26 +870,22 @@ impl Component for Model {
                 self.link.send_message(Msg::LogEvent(message));
                 true
             }
-            Msg::InitiateWebsocketConnectionProcess => {
-                
+            Msg::InitiateWebsocketConnectionProcess => match WebSocket::new(WEBSOCKET_URL) {
+                Ok(ws) => {
+                    let ws = self.setup_websocket_object_callbacks(ws);
 
-                match WebSocket::new(WEBSOCKET_URL) {
-                    Ok(ws) => {
-                        let ws = self.setup_websocket_object_callbacks(ws);
-
-                        self.websocket = Some(ws);
-                        let messages: Vec<Msg> =
-                            vec![Msg::LogEvent("attempting ws connection ...".to_string())];
-                        self.link.send_message_batch(messages);
-                        true
-                    }
-                    Err(err) => {
-                        self.link
-                            .send_message(Msg::LogEvent(format!("error: {:?}", err)));
-                        true
-                    }
+                    self.websocket = Some(ws);
+                    let messages: Vec<Msg> =
+                        vec![Msg::LogEvent("attempting ws connection ...".to_string())];
+                    self.link.send_message_batch(messages);
+                    true
                 }
-            }
+                Err(err) => {
+                    self.link
+                        .send_message(Msg::LogEvent(format!("error: {:?}", err)));
+                    true
+                }
+            },
             Msg::SetClient(client) => {
                 self.client_to_model(client);
 
@@ -935,86 +926,71 @@ impl Component for Model {
                 true
             }
             Msg::ReceivedIceCandidate(ice_candidate) => {
-
-              
-                
+                let local = self.local_web_rtc_connection.clone().unwrap();
 
                 for transceiver in local.get_transceivers().to_vec() {
-
-
                     let transceiver = transceiver.dyn_into::<RtcRtpTransceiver>().unwrap();
 
-                    
-
-                    
                     let link = self.link.clone();
 
-                     match transceiver.mid().clone()
-                     {
-                         Some(mid) => {
-
+                    match transceiver.mid().clone() {
+                        Some(mid) => {
                             let mut init = RtcIceCandidateInit::new(&ice_candidate);
-                             init.sdp_mid(Some(&mid));
-                             link.send_message(Msg::LogEvent(format!("Set the mid value for the following transceiver: {:?}", transceiver)));
-                             let candidate = RtcIceCandidate::new(&init).unwrap();
-                             link.send_message(Msg::AddRemoteIceCandidate(candidate));
-                         }
-                         None => {
-                             link.send_message(Msg::LogEvent(format!("Wasn't able to set the mid value for the following transceiver: {:?}", transceiver)));
-                         }
-                     }
-
-                     
+                            init.sdp_mid(Some(&mid));
+                            link.send_message(Msg::LogEvent(format!(
+                                "Set the mid value for the following transceiver: {:?}",
+                                transceiver
+                            )));
+                            let candidate = RtcIceCandidate::new(&init).unwrap();
+                            link.send_message(Msg::AddRemoteIceCandidate(candidate));
+                        }
+                        None => {
+                            link.send_message(Msg::LogEvent(format!("Wasn't able to set the mid value for the following transceiver: {:?}", transceiver)));
+                        }
+                    }
                 }
-
-
-
-                
-
-
-
-                
-
                 true
-            },
+            }
             Msg::AddRemoteIceCandidate(candidate) => {
-
-                let local = self.local_web_rtc_connection.unwrap();
+                let local = self.local_web_rtc_connection.clone().unwrap();
                 let link = self.link.clone();
 
-                spawn_local(async move { 
-
-                    match wasm_bindgen_futures::JsFuture::from(local.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate))).await {
+                spawn_local(async move {
+                    match wasm_bindgen_futures::JsFuture::from(
+                        local.add_ice_candidate_with_opt_rtc_ice_candidate(Some(&candidate)),
+                    )
+                    .await
+                    {
                         Ok(_local) => {
-                            let local = local.dyn_into::<RtcPeerConnection>().expect("Couldn't convert the RtcPeerConnection");
+                            let local = local
+                                .dyn_into::<RtcPeerConnection>()
+                                .expect("Couldn't convert the RtcPeerConnection");
                             link.send_message(Msg::OverrideRtcPeer(local));
-                            link.send_message(Msg::LogEvent(format!("Successfully added ice candidate from remote peer!")));
+                            link.send_message(Msg::LogEvent(format!(
+                                "Successfully added ice candidate from remote peer!"
+                            )));
                         }
-                            Err(err) => {link.send_message(Msg::LogEvent(format!("Had the following error trying to reset the local RtcPeerConnection: {:?}", err)));}
+                        Err(err) => {
+                            link.send_message(Msg::LogEvent(format!("Had the following error trying to reset the local RtcPeerConnection: {:?}", err)));
+                        }
                     }
-
-                    
-    
-
-                 });
-                 true
-
+                });
+                true
             }
             Msg::SendIceCandidate(ice_candidate) => {
                 let partner_id = self.partner.clone().unwrap();
-                
+
                 let envelope = Envelope::new(
                     EntityDetails::Client(self.user_id.unwrap()),
                     EntityDetails::Client(partner_id),
                     Some(EntityDetails::Server),
-                    Command::IceCandidate(ice_candidate.clone())
+                    Command::IceCandidate(ice_candidate.clone()),
                 );
 
                 self.send_ws_message(envelope);
 
-
                 true
-            },
+            }
             Msg::SetLocalWebRtcOffer(offer) => {
                 let local = self
                     .local_web_rtc_connection
@@ -1102,15 +1078,11 @@ impl Component for Model {
                     .expect("error unwrapping the local_web_rtc_connection in ReceiveSdpResponse");
                 let link = self.link.clone();
 
-                spawn_local(
-                    
-
-                    async move { set_remote_webrtc_answer(sdp, local, link).await });
+                spawn_local(async move { set_remote_webrtc_answer(sdp, local, link).await });
 
                 true
             }
             Msg::MakeSdpResponse(sdp, client) => {
-
                 self.partner = Some(client.clone());
 
                 self.link.send_message(Msg::LogEvent(format!(
@@ -1128,7 +1100,9 @@ impl Component for Model {
                 let link = self.link.clone();
                 let local_stream = self.local_stream.clone();
 
-                spawn_local(async move { set_remote_webrtc_offer(sdp, client, local_stream, link).await });
+                spawn_local(async move {
+                    set_remote_webrtc_offer(sdp, client, local_stream, link).await
+                });
 
                 true
             }

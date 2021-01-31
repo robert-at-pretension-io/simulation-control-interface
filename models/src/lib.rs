@@ -104,7 +104,7 @@ pub enum Command {
     /// This is needed to confirm that the server is ready to close the connection
     AckClosedConnection(uuid::Uuid),
     /// Ice Candidate used for supporting a webrtc connection channel
-    IceCandidate(String)
+    IceCandidate(String),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
