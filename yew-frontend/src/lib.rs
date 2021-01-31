@@ -909,24 +909,38 @@ impl Component for Model {
             Msg::ReceivedIceCandidate(ice_candidate) => {
                 let local = self.local_web_rtc_connection.clone().unwrap();
 
-                let mut mid  = String::new();
+                let mut mid : Option<String>  = None;
 
                 // Right here is where we get the transceiver from the local web_rtc connection. With it we can get the media id (MID). Then the RtcIceCandidate it is initialized with the MID. I hate not knowing the abstractions that are assumed to be understood with a third party libraries 😭
+
+                let mut init = RtcIceCandidateInit::new(&ice_candidate);
+                
 
                 for transceiver in local.get_transceivers().to_vec() {
                     let transceiver = transceiver.dyn_into::<RtcRtpTransceiver>().unwrap();
 
-                     let val = transceiver.mid().clone().unwrap();
 
-                     mid = val;
+
+                    
+                    let link = self.link.clone();
+
+                     match transceiver.mid().clone()
+                     {
+                         Some(mid) => {
+                             init.sdp_mid(Some(&mid));
+                         }
+                         None => {
+                             link.send_message(Msg::LogEvent(format!("Wasn't able to set the mid value for the following transceiver: {:?}", transceiver)));
+                         }
+                     }
+
+                     
                 }
 
-                let mut init = RtcIceCandidateInit::new(&ice_candidate);
-                let init = init.sdp_mid(Some(&mid));
+
 
                 let candidate = RtcIceCandidate::new(&init).unwrap();
 
-                // let candidate = RtcIceCandidate::set_candidate(&ice_candidate);
 
                 let link = self.link.clone();
 
