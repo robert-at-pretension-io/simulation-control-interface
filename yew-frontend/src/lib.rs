@@ -61,7 +61,6 @@ impl Model {
         self.local_stream = None;
         self.remote_stream = None;
         self.remote_video = NodeRef::default();
-        self.local_video = NodeRef::default();
         self.username = None;
         self.user_id = None;
         self.connection_socket_address = None;
@@ -741,6 +740,16 @@ impl Component for Model {
             }
             Msg::ResetPage => {
                 self.reset_state();
+
+                let val =self.remote_video.cast::<HtmlMediaElement>().unwrap();
+                let stream = self.remote_stream.clone().unwrap();
+                for track in stream.clone().get_tracks().to_vec() {
+                    let track = track.dyn_into::<MediaStreamTrack>().unwrap();
+                    stream.remove_track(&track);
+                }
+                val.set_src_object(Some(&stream));
+                self.remote_stream = Some(stream);
+
                 true
             }
             Msg::RequestUsersOnline(client) => {
@@ -1056,7 +1065,7 @@ impl Component for Model {
         html! {
             <div>
             // <h1> {"Local Video"} </h1>
-            <video  width="320" height="240" autoplay=true controls=true ref=self.local_video.clone()> </video>
+            <video  width="320" height="240" muted=true autoplay=true controls=true ref=self.local_video.clone()> </video>
 
 
             // <h1> "Remote Video" </h1>
