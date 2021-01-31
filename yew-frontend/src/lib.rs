@@ -473,18 +473,16 @@ async fn set_remote_webrtc_offer(
 
     match client.clone() {
         Ok(local) => {
-            let onicecandidate_callback =return_ice_callback(link.clone());
 
 
             link.send_message(Msg::LogEvent(format!("successfully setup stun server!")));
-            local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
 
+            let onicecandidate_callback =return_ice_callback(link.clone());
+            local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
             onicecandidate_callback.forget();
 
             let return_track_callback = return_track_added_callback(link.clone());
-
             local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
-        
             return_track_callback.forget();
 
             // This is now where the code for sending a response goes...
@@ -555,15 +553,16 @@ async fn create_and_set_answer_locally(
         link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
     }
 
+    local.
+
     let return_track_callback = return_track_added_callback(link.clone());
-
     local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
-
     return_track_callback.forget();
 
-    // let mut offer_options =   RtcOfferOptions::new();
-    
-    // offer_options.offer_to_receive_audio(true).offer_to_receive_video(true);
+    let onicecandidate_callback =return_ice_callback(link.clone());
+    local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
+    onicecandidate_callback.forget();
+
 
     let answer = JsFuture::from(local.create_answer())
         .await
