@@ -41,6 +41,7 @@ features = [
   "RtcOfferOptions",
   "RtcRtpTransceiver",
   "RtcRtpTransceiverDirection",
+  "RtcRtpReceiver",
   "RtcDataChannel",
   "RtcDataChannelEvent",
   "MediaDevices",

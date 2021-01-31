@@ -22,7 +22,7 @@ use std::collections::HashSet;
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpSender, RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window};
+use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver, RtcRtpSender, RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window};
 
 use console_error_panic_hook;
 use std::panic;
@@ -524,13 +524,31 @@ async fn set_remote_webrtc_answer(
     let srd_promise = local.set_remote_description(&answer_obj);
     match JsFuture::from(srd_promise).await {
         Ok(_) => {
-            link.send_message(Msg::OverrideRtcPeer(local));
+            link.send_message(Msg::OverrideRtcPeer(local.clone()));
             link.send_message(Msg::LogEvent(format!(
                 "Successfully set the remote webrtc answer!"
             )));
+
+            link.send_message(Msg::LogEvent(format!("Attempting to add the remote sender to the remote_video element")));
+
+
+
+
         }
         Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:?}", err))),
     }
+
+    for receiver in local.get_receivers().to_vec() {
+        match receiver.dyn_into::<RtcRtpReceiver>() {
+            Ok(receiver) => {
+                link.send_message(Msg::AddRemoteMediaStream(receiver.track()));
+            }
+            Err(err) => {
+                link.send_message(Msg::LogEvent(format!("Received the following error: {:?}", err)));
+            }
+        }
+    }
+
 }
 
 async fn create_and_set_answer_locally(
@@ -555,7 +573,6 @@ async fn create_and_set_answer_locally(
             transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
 
 
-                // RtcPeerConnection::add_track_0(&local,&track, my_stream);
         }
         link.send_message(Msg::LogEvent(format!("Added the local tracks")));
     }
@@ -1077,7 +1094,10 @@ impl Component for Model {
                     .expect("error unwrapping the local_web_rtc_connection in ReceiveSdpResponse");
                 let link = self.link.clone();
 
-                spawn_local(async move { set_remote_webrtc_answer(sdp, local, link).await });
+                spawn_local(
+                    
+
+                    async move { set_remote_webrtc_answer(sdp, local, link).await });
 
                 true
             }
