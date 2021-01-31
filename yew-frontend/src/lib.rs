@@ -77,6 +77,7 @@ enum Msg {
     LogEvent(String),
     IncreaseLogSize,
     DecreaseLogSize,
+    MaxLogSize,
     SetLocalMediaStream,
 
     SetupWebRtc(),
@@ -642,6 +643,11 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::MaxLogSize => {
+                self.event_log_length = self.event_log.len();
+                
+                true
+            }
 
             Msg::CloseWebRtcConnection => {
                 match self.local_web_rtc_connection.as_ref() {
@@ -1116,6 +1122,7 @@ impl Component for Model {
 
                     <button onclick=self.link.callback(|_| {Msg::DecreaseLogSize})> {"Decrease Log Size"} </button>
                     <button onclick=self.link.callback(|_| {Msg::IncreaseLogSize})> {"Increase Log Size"} </button>
+                    <button onclick=self.link.callback(|_| {Msg::MaxLogSize})> {"Show all Log"} </button>
 
                 {if (self.event_log.len() > 5 ){ html!(<button onclick=self.link.callback(|_| {Msg::ClearLog})> {"Clear the event log."} </button> )} else {html!(<></>)}  }
                 <div>
