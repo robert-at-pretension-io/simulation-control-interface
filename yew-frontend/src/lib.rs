@@ -554,6 +554,7 @@ async fn create_and_set_answer_locally(
 
             transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
 
+
                 // RtcPeerConnection::add_track_0(&local,&track, my_stream);
         }
         link.send_message(Msg::LogEvent(format!("Added the local tracks")));
@@ -711,6 +712,7 @@ impl Component for Model {
                 true
             }
             Msg::AddRemoteMediaStream(track) => {
+                self.link.send_message(Msg::LogEvent(format!("Added remote track to the local video element")));
                 let val =self.remote_video.cast::<HtmlMediaElement>().unwrap();
                 let stream = self.remote_stream.clone().unwrap();
                 stream.add_track(&track);
@@ -925,6 +927,8 @@ impl Component for Model {
                 
 
                 for transceiver in local.get_transceivers().to_vec() {
+
+
                     let transceiver = transceiver.dyn_into::<RtcRtpTransceiver>().unwrap();
 
 
@@ -936,6 +940,7 @@ impl Component for Model {
                      {
                          Some(mid) => {
                              init.sdp_mid(Some(&mid));
+                             link.send_message(Msg::LogEvent(format!("Set the mid value for the following transceiver: {:?}", transceiver)));
                          }
                          None => {
                              link.send_message(Msg::LogEvent(format!("Wasn't able to set the mid value for the following transceiver: {:?}", transceiver)));
