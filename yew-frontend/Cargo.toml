@@ -40,6 +40,7 @@ features = [
   "RtcIceCandidateInit",
   "RtcOfferOptions",
   "RtcRtpTransceiver",
+  "RtcRtpTransceiverDirection",
   "RtcDataChannel",
   "RtcDataChannelEvent",
   "MediaDevices",

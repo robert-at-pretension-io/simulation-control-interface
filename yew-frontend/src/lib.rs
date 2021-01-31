@@ -22,7 +22,7 @@ use std::collections::HashSet;
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpSender, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window, RtcRtpTransceiver};
+use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpSender, RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window, add_transceiver_with_media_stream_track};
 
 use console_error_panic_hook;
 use std::panic;
@@ -545,7 +545,13 @@ async fn create_and_set_answer_locally(
     if let Some(my_stream) = &local_stream {
         for track in my_stream.clone().get_tracks().to_vec() {
             let track = track.dyn_into::<MediaStreamTrack>().unwrap();
-            RtcPeerConnection::add_track_0(&local,&track, my_stream);
+            
+
+            let transceiver : RtcRtpTransceiver = local.add_transceiver_with_media_stream_track(&track);
+
+            transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
+
+                // RtcPeerConnection::add_track_0(&local,&track, my_stream);
         }
         link.send_message(Msg::LogEvent(format!("Added the local tracks")));
     }
@@ -562,6 +568,8 @@ async fn create_and_set_answer_locally(
     let onicecandidate_callback =return_ice_callback(link.clone());
     local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
     onicecandidate_callback.forget();
+
+
 
 
     let answer = JsFuture::from(local.create_answer())
@@ -675,7 +683,7 @@ impl Component for Model {
                         .local_web_rtc_connection
                         .clone()
                         .expect("error unwraping the local_web_rtc_connection");
-                    self.link.send_message(Msg::LogEvent(format!("RTC Connection Status:\nIce Connection State: {:?}\nSignaling State: {:?}\nIce Gathering State: {:?}", local.ice_connection_state(), local.signaling_state(), local.ice_gathering_state())));
+                    self.link.send_message(Msg::LogEvent(format!("::RTC Connection Status::\nIce Connection State: {:?}\nSignaling State: {:?}\nIce Gathering State: {:?}", local.ice_connection_state(), local.signaling_state(), local.ice_gathering_state())));
                     true
                 } else {
                     false
