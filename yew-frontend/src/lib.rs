@@ -22,14 +22,7 @@ use std::collections::HashSet;
 use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
-use web_sys::{
-    Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack,
-    MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate,
-    RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer,
-    RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver, RtcRtpSender,
-    RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit,
-    RtcSignalingState, RtcTrackEvent, WebSocket, Window,
-};
+use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver, RtcRtpSender, RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window, create_offer};
 
 use console_error_panic_hook;
 use std::panic;
@@ -400,13 +393,15 @@ async fn create_webrtc_offer(
     receiver: uuid::Uuid,
     local: RtcPeerConnection,
 ) {
-    let mut offer_options = RtcOfferOptions::new();
+    // let mut offer_options = RtcOfferOptions::new();
 
-    offer_options
-        .offer_to_receive_audio(true)
-        .offer_to_receive_video(true);
+    // offer_options
+    //     .offer_to_receive_audio(true)
+    //     .offer_to_receive_video(true);
 
-    match  JsFuture::from(local.create_offer_with_rtc_offer_options(&offer_options))
+    // match  JsFuture::from(local.create_offer_with_rtc_offer_options(&offer_options))
+
+    match JsFuture::from(local.create_offer())
         .await {
             Ok(offer) => {
                 let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp"))
