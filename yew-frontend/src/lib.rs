@@ -400,26 +400,32 @@ async fn create_webrtc_offer(
     receiver: uuid::Uuid,
     local: RtcPeerConnection,
 ) {
-    // let mut offer_options = RtcOfferOptions::new();
+    let mut offer_options = RtcOfferOptions::new();
 
-    // offer_options
-    //     .offer_to_receive_audio(true)
-    //     .offer_to_receive_video(true);
+    offer_options
+        .offer_to_receive_audio(true)
+        .offer_to_receive_video(true);
 
-    // let offer = JsFuture::from(local.create_offer_with_rtc_offer_options(&offer_options))
-    //     .await
-    //     .expect("error creating offer.");
-
-        let offer = JsFuture::from(local.create_offer())
-        .await
-        .expect("error creating offer.");
-
-    let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp"))
+    match  JsFuture::from(local.create_offer_with_rtc_offer_options(&offer_options))
+        .await {
+            Ok(offer) => {
+                let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp"))
         .expect("error getting offer sdp")
         .as_string()
         .expect("error converting offer sdp to string");
 
     link.send_message(Msg::SendSdpRequestToClient(receiver, offer_sdp));
+            }
+            Err(err) => {
+                link.send_message(Msg::ResetPage);
+                link.send_message(Msg::LogEvent(format!("Peer Connection was offline, trying to reconnect to server. err: {:?}", err)));
+            }
+        }
+
+        // let offer = JsFuture::from(local.create_offer())
+        // .await;
+
+    
 }
 
 fn return_ice_callback(
