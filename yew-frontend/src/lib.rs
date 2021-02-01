@@ -36,7 +36,7 @@ enum State {
 }
 
 static WEBSOCKET_URL: &str = "wss://liminalnook.com:2096";
-static STUN_SERVER: &str = "stun:stun.services.mozilla.com";
+static STUN_SERVER: &str = "stun:stun.l.google.com:19302";
 
 struct Model {
     local_stream: Option<MediaStream>,
@@ -502,7 +502,8 @@ async fn set_remote_webrtc_offer(
             offer_obj.sdp(&remote_sdp);
             let srd_promise = local.set_remote_description(&offer_obj);
             match JsFuture::from(srd_promise).await {
-                Ok(_) => {
+                Ok(
+                _) => {
                     link.send_message(Msg::OverrideRtcPeer(local.clone()));
                     link.send_message(Msg::LogEvent(format!(
                         "Successfully set the remote webrtc offer!"
