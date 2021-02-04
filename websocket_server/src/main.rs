@@ -97,10 +97,6 @@ async fn establish_and_maintain_each_client_ws_connection(
         mpsc::channel::<Envelope>(10);
 
     let address: Option<std::net::SocketAddr> = Some(peer_address);
-    // match stream.peer_addr() {
-    //     Ok(add) => {address = Some(add)},
-    //     Err(err) => info!("Couldn't unwrap the stream's ip address :[ ... {:?}", err)
-    // }
 
     let this_client = Client {
         username: None,
@@ -153,6 +149,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                 }
                 None => {
                     info!("Somehow received a None error message :x");
+                    return
                 }
 
             }
@@ -182,6 +179,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                                     }
                                 },
                                 Message::Close(_reason) => {
+                                    info!("Close message received");
                                     return
 
 
