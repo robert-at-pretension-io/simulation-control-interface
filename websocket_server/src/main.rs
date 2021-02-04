@@ -73,9 +73,14 @@ async fn send_message(
                 ),
             }
         }
-        tokio_tungstenite::tungstenite::Message::Close(_)
-        | tokio_tungstenite::tungstenite::Message::Ping(_)
-        | tokio_tungstenite::tungstenite::Message::Pong(_) => {
+        tokio_tungstenite::tungstenite::Message::Close(_) => {
+            info!("Received close message");
+        }
+        tokio_tungstenite::tungstenite::Message::Ping(_) => {
+            info!("Received ping message");
+        }
+        tokio_tungstenite::tungstenite::Message::Pong(_) => {
+            info!("Received pong message");
             //
         }
     }
@@ -147,7 +152,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                     }
                 }
                 None => {
-
+                    info!("Somehow received a None error message :x");
                 }
 
             }
