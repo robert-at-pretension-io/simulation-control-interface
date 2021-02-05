@@ -393,15 +393,15 @@ async fn create_webrtc_offer(
     receiver: uuid::Uuid,
     local: RtcPeerConnection,
 ) {
-    // let mut offer_options = RtcOfferOptions::new();
+    let mut offer_options = RtcOfferOptions::new();
 
-    // offer_options
-    //     .offer_to_receive_audio(true)
-    //     .offer_to_receive_video(true);
+    offer_options
+        .offer_to_receive_audio(true)
+        .offer_to_receive_video(true);
 
-    // match  JsFuture::from(local.create_offer_with_rtc_offer_options(&offer_options))
+    match  JsFuture::from(local.create_offer_with_rtc_offer_options(&offer_options))
 
-    match JsFuture::from(local.create_offer())
+    // match JsFuture::from(local.create_offer())
         .await {
             Ok(offer) => {
                 let offer_sdp = Reflect::get(&offer, &JsValue::from_str("sdp"))
@@ -689,7 +689,9 @@ impl Component for Model {
                         "Removing the track {:?} from the remote stream",
                         track
                     )));
+                    
                     stream.remove_track(&track);
+                    track.stop();
                 }
                 val.set_src_object(Some(&stream));
                 self.remote_stream = Some(stream);
