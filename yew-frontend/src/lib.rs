@@ -171,11 +171,11 @@ impl Model {
 
         match ws.send_with_u8_array(data) {
             Ok(_) => self.link.send_message(Msg::LogEvent(format!(
-                "Successfully sent the ws message: {:?}",
+                "Successfully sent the ws message: {:#?}",
                 message
             ))),
             Err(err) => self.link.send_message(Msg::LogEvent(format!(
-                "There was an error sending the ws message: {:?}",
+                "There was an error sending the ws message: {:#?}",
                 err
             ))),
         }
@@ -198,7 +198,7 @@ impl Model {
 
         html!(<li> <button onclick=self.link.callback( move |_| {
                     Msg::MakeSdpRequestToClient(client_clone.user_id.clone())
-                } ) > {format!("{:?} : {:?}", client_clone2.username.clone() , client_clone2.current_socket_addr.clone())} </button> </li>)
+                } ) > {format!("{:#?} : {:#?}", client_clone2.username.clone() , client_clone2.current_socket_addr.clone())} </button> </li>)
     }
 
     fn setup_websocket_object_callbacks(&mut self, ws: WebSocket) -> WebSocket {
@@ -214,7 +214,7 @@ impl Model {
                 match Envelope::deserialize(&array.to_vec()) {
                     Ok(result) => {
                         cloned.send_message(Msg::LogEvent(format!(
-                            "Received the following command message: {:?}",
+                            "Received the following command message: {:#?}",
                             result.command.clone()
                         )));
                         let sender = result.sender;
@@ -229,7 +229,7 @@ impl Model {
                             Command::ServerInitiated(client) => {
                                 let messages = vec![
                                     Msg::LogEvent(format!(
-                                        "{:?} Connected To Websocket Server!",
+                                        "{:#?} Connected To Websocket Server!",
                                         client
                                     )),
                                     Msg::SetClient(client.clone()),
@@ -335,7 +335,7 @@ impl Model {
                         transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
 
                         self.link.send_message(Msg::LogEvent(format!(
-                            "Added the local track {:?} to the transceiver {:?} of the WebRtc Connection {:?}", track, transceiver, client
+                            "Added the local track {:#?} to the transceiver {:#?} of the WebRtc Connection {:#?}", track, transceiver, client
                         )));
 
 
@@ -348,7 +348,7 @@ impl Model {
                 }
             }
             Err(err) => self.link.send_message(Msg::LogEvent(format!(
-                "Received the following error: {:?}",
+                "Received the following error: {:#?}",
                 err
             ))),
         }
@@ -377,15 +377,15 @@ async fn get_local_user_media(link: ComponentLink<Model>) {
                     link.send_message(Msg::SetLocalMediaStream);
                     link.send_message(Msg::InitiateWebsocketConnectionProcess);
                 }
-                Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:?}", err))),
+                Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:#?}", err))),
             },
             Err(err) => link.send_message(Msg::LogEvent(format!(
-                "Error with getting user media: {:?}",
+                "Error with getting user media: {:#?}",
                 err
             ))),
         },
         Err(err) => link.send_message(Msg::LogEvent(format!(
-            "Recevied the following error while trying to get the media devices...: {:?}",
+            "Recevied the following error while trying to get the media devices...: {:#?}",
             err
         ))),
     }
@@ -416,7 +416,7 @@ async fn create_webrtc_offer(
             }
             Err(err) => {
                 link.send_message(Msg::ResetPage);
-                link.send_message(Msg::LogEvent(format!("Peer Connection was offline, trying to reconnect to server. err: {:?}", err)));
+                link.send_message(Msg::LogEvent(format!("Peer Connection was offline, trying to reconnect to server. err: {:#?}", err)));
             }
         }
 
@@ -452,7 +452,7 @@ fn return_track_added_callback(
     Closure::wrap(Box::new(move |event: RtcTrackEvent| {
         let track = event.track();
         cloned_link.send_message(Msg::LogEvent(format!(
-            "The remote track: {:?} was added to the RtcPeerConnection",
+            "The remote track: {:#?} was added to the RtcPeerConnection",
             track
         )));
 
@@ -513,13 +513,13 @@ async fn set_remote_webrtc_offer(
                     )));
                     create_and_set_answer_locally(receiver, local, local_stream.clone(), link).await
                 }
-                Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:?}", err))),
+                Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:#?}", err))),
             }
         }
 
         // link.send_message(Msg::RtcClientReady(client));}
         Err(err) => link.send_message(Msg::LogEvent(format!(
-            "Received the following error: {:?}",
+            "Received the following error: {:#?}",
             err
         ))),
     }
@@ -544,7 +544,7 @@ async fn set_remote_webrtc_answer(
                 "Attempting to add the remote sender to the remote_video element"
             )));
         }
-        Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:?}", err))),
+        Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:#?}", err))),
     }
 
     for receiver in local.get_receivers().to_vec() {
@@ -554,7 +554,7 @@ async fn set_remote_webrtc_answer(
             }
             Err(err) => {
                 link.send_message(Msg::LogEvent(format!(
-                    "Received the following error: {:?}",
+                    "Received the following error: {:#?}",
                     err
                 )));
             }
@@ -618,7 +618,7 @@ async fn create_and_set_answer_locally(
                 link.send_message(Msg::OverrideRtcPeer(local));
             }
             Err(err) => link.send_message(Msg::LogEvent(format!(
-                "Error while trying to submit the sdp answer: {:?}",
+                "Error while trying to submit the sdp answer: {:#?}",
                 err
             ))),
         }
@@ -635,7 +635,7 @@ async fn set_local_webrtc_offer(
     let sld_promise = local.set_local_description(&offer_obj);
     match JsFuture::from(sld_promise).await {
         Ok(_) => link.send_message(Msg::OverrideRtcPeer(local)),
-        Err(err) => link.send_message(Msg::LogEvent(format!("Got the following Error: {:?}", err))),
+        Err(err) => link.send_message(Msg::LogEvent(format!("Got the following Error: {:#?}", err))),
     }
 }
 
@@ -689,7 +689,7 @@ impl Component for Model {
                 for track in stream.clone().get_tracks().to_vec() {
                     let track = track.dyn_into::<MediaStreamTrack>().unwrap();
                     self.link.send_message(Msg::LogEvent(format!(
-                        "Removing the track {:?} from the remote stream",
+                        "Removing the track {:#?} from the remote stream",
                         track
                     )));
                     
@@ -720,7 +720,7 @@ impl Component for Model {
                         .local_web_rtc_connection
                         .clone()
                         .expect("error unwraping the local_web_rtc_connection");
-                    self.link.send_message(Msg::LogEvent(format!("::RTC Connection Status::\nIce Connection State: {:?}\nSignaling State: {:?}\nIce Gathering State: {:?}", local.ice_connection_state(), local.signaling_state(), local.ice_gathering_state())));
+                    self.link.send_message(Msg::LogEvent(format!("::RTC Connection Status::\nIce Connection State: {:#?}\nSignaling State: {:#?}\nIce Gathering State: {:#?}", local.ice_connection_state(), local.signaling_state(), local.ice_gathering_state())));
                     true
                 } else {
                     false
@@ -828,7 +828,7 @@ impl Component for Model {
             }
             Msg::SendWsMessage(control_message) => {
                 self.link.send_message(Msg::LogEvent(format!(
-                    "Sending Message to server: {:?}",
+                    "Sending Message to server: {:#?}",
                     &control_message
                 )));
                 self.send_ws_message(control_message);
@@ -869,13 +869,13 @@ impl Component for Model {
             Msg::RemoveState(state) => match self.states.remove(&state) {
                 true => {
                     self.link.send_message(Msg::LogEvent(format!(
-                        "Removed the following state: {:?}",
+                        "Removed the following state: {:#?}",
                         state
                     )));
                     true
                 }
                 false => {
-                    self.link.send_message(Msg::LogEvent(format!("Tried removing the following state: {:?}. But it wasn't in the current set of states.", state)));
+                    self.link.send_message(Msg::LogEvent(format!("Tried removing the following state: {:#?}. But it wasn't in the current set of states.", state)));
                     true
                 }
             },
@@ -899,7 +899,7 @@ impl Component for Model {
                 }
                 Err(err) => {
                     self.link
-                        .send_message(Msg::LogEvent(format!("error: {:?}", err)));
+                        .send_message(Msg::LogEvent(format!("error: {:#?}", err)));
                     true
                 }
             },
@@ -955,14 +955,14 @@ impl Component for Model {
                             let mut init = RtcIceCandidateInit::new(&ice_candidate);
                             init.sdp_mid(Some(&mid));
                             link.send_message(Msg::LogEvent(format!(
-                                "Set the mid value for the following transceiver: {:?}",
+                                "Set the mid value for the following transceiver: {:#?}",
                                 transceiver
                             )));
                             let candidate = RtcIceCandidate::new(&init).unwrap();
                             link.send_message(Msg::AddRemoteIceCandidate(candidate));
                         }
                         None => {
-                            link.send_message(Msg::LogEvent(format!("Wasn't able to set the mid value for the following transceiver: {:?}", transceiver)));
+                            link.send_message(Msg::LogEvent(format!("Wasn't able to set the mid value for the following transceiver: {:#?}", transceiver)));
                         }
                     }
                 }
@@ -988,7 +988,7 @@ impl Component for Model {
                             )));
                         }
                         Err(err) => {
-                            link.send_message(Msg::LogEvent(format!("Had the following error trying to reset the local RtcPeerConnection: {:?}", err)));
+                            link.send_message(Msg::LogEvent(format!("Had the following error trying to reset the local RtcPeerConnection: {:#?}", err)));
                         }
                     }
                 });
@@ -1060,7 +1060,7 @@ impl Component for Model {
 
             Msg::SendSdpResponse(client, sdp_response) => {
                 self.link.send_message(Msg::LogEvent(format!(
-                    "Sending sdp response {:?} back to other client",
+                    "Sending sdp response {:#?} back to other client",
                     sdp_response.clone()
                 )));
 
@@ -1084,7 +1084,7 @@ impl Component for Model {
 
             Msg::ReceiveSdpResponse(sender, sdp) => {
                 self.link.send_message(Msg::LogEvent(format!(
-                    "Received the following sdp reponse: {:?} from client {:?}",
+                    "Received the following sdp reponse: {:#?} from client {:#?}",
                     sdp.clone(),
                     sender.clone()
                 )));
@@ -1103,7 +1103,7 @@ impl Component for Model {
                 self.partner = Some(client.clone());
 
                 self.link.send_message(Msg::LogEvent(format!(
-                    "Received the following sdp request: {:?} from client {:?}",
+                    "Received the following sdp request: {:#?} from client {:#?}",
                     sdp, client
                 )));
 
