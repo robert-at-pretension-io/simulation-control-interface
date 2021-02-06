@@ -948,6 +948,10 @@ impl Component for Model {
                 for transceiver in local.get_transceivers().to_vec() {
                     let transceiver = transceiver.dyn_into::<RtcRtpTransceiver>().unwrap();
 
+
+                    let direction = transceiver.direction();
+                    self.link.send_message(Msg::LogEvent(format!("This transceiver has the following direction: {:#?}", direction)));
+
                     let link = self.link.clone();
 
                     match transceiver.mid().clone() {
