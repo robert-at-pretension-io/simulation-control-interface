@@ -83,7 +83,6 @@ enum Msg {
     SetLocalMediaStream,
 
     SetupWebRtc(),
-    RtcClientReady(RtcPeerConnection),
     StoreMediaStream(MediaStream),
     ReceivedIceCandidate(String),
     AddRemoteIceCandidate(RtcIceCandidate),
@@ -92,7 +91,6 @@ enum Msg {
     SetLocalWebRtcOffer(String),
     CloseWebRtcConnection,
 
-    SetLocalMedia,
     AddRemoteMediaStream(MediaStreamTrack),
 
     MakeSdpResponse(String, uuid::Uuid),
@@ -309,7 +307,7 @@ impl Model {
         let config = config.ice_servers(&val);
         let client = RtcPeerConnection::new_with_configuration(&config);
 
-        match client.clone() {
+        match client {
             Ok(client) => {
 
                 self.link
@@ -338,11 +336,12 @@ impl Model {
                             "Added the local track {:#?} to the transceiver {:#?} of the WebRtc Connection {:#?}", track, transceiver, client
                         )));
 
-
+                    
                     }
                     
 
-                    self.link.send_message(Msg::RtcClientReady(client));
+                    self.link.send_message(Msg::OverrideRtcPeer(client));
+
                 } else {
                     self.link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
                 }
@@ -466,10 +465,9 @@ async fn set_remote_webrtc_offer(
     local_stream: Option<MediaStream>,
     link: ComponentLink<Model>,
 ) {
-    let cloned_link = link.clone();
+    
 
     let mut config = RtcConfiguration::new();
-    // let mut ice_server = RtcIceServer::new();
 
     use serde::{Deserialize, Serialize};
 
@@ -580,6 +578,7 @@ async fn create_and_set_answer_locally(
                 local.add_transceiver_with_media_stream_track(&track);
 
             transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
+            link.send_message(Msg::OverrideRtcPeer(local.clone()));
         }
         link.send_message(Msg::LogEvent(format!("Added the local tracks")));
     } else {
@@ -604,13 +603,13 @@ async fn create_and_set_answer_locally(
             .as_string()
             .expect("error converting to string");
        
-        let re = Regex::new(r"recvonly").unwrap();
-        let string: String = re.replace_all(&answer_sdp, "sendrecv").into();
+        // let re = Regex::new(r"recvonly").unwrap();
+        // let string: String = re.replace_all(&answer_sdp, "sendrecv").into();
 
 
 
         let mut answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
-        answer_obj.sdp(&string);
+        answer_obj.sdp(&answer_sdp);
         let sld_promise = local.set_local_description(&answer_obj);
         match JsFuture::from(sld_promise).await {
             Ok(_) => {
@@ -790,24 +789,7 @@ impl Component for Model {
                 }
                 true
             }
-            Msg::RtcClientReady(client) => {
-                self.local_web_rtc_connection = Some(client);
-                self.link.send_message(Msg::LogEvent(format!(
-                    "local WebRTC successfully set! Able to send sdp objects to clients now!"
-                )));
-                self.link.send_message(Msg::ReportRtcDiagnostics());
-                self.link.send_message(Msg::SetLocalMedia);
-                false
-            }
-            Msg::SetLocalMedia => {
-                let link = self.link.clone();
-                let local = self
-                    .local_web_rtc_connection
-                    .clone()
-                    .expect("error with unwrapping the local web rtc in setlocalmedia msg ");
 
-                true
-            }
             Msg::ResetPage => {
                 self.reset_state();
 
