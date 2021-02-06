@@ -311,7 +311,6 @@ impl Model {
 
         match client.clone() {
             Ok(client) => {
-                // let mut ice_server = RtcIceServer::new();
 
                 self.link
                     .send_message(Msg::LogEvent(format!("successfully setup stun server! ")));
@@ -334,10 +333,14 @@ impl Model {
                             client.add_transceiver_with_media_stream_track(&track);
 
                         transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
+
+                        self.link.send_message(Msg::LogEvent(format!(
+                            "Added the local track {:?} to the transceiver {:?} of the WebRtc Connection {:?}", track, transceiver, client
+                        )));
+
+
                     }
-                    self.link.send_message(Msg::LogEvent(format!(
-                        "Added the local tracks to the WebRtc Connection"
-                    )));
+                    
 
                     self.link.send_message(Msg::RtcClientReady(client));
                 } else {
