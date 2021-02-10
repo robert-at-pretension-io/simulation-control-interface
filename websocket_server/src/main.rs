@@ -73,14 +73,38 @@ async fn send_message(
                 ),
             }
         }
-        tokio_tungstenite::tungstenite::Message::Close(_) => {
+        tokio_tungstenite::tungstenite::Message::Close(reason) => {
             info!("Received close message");
+            match stream
+            .send(tokio_tungstenite::tungstenite::Message::Close(
+                reason.clone(),
+            ))
+            .await
+        {
+            Ok(_) => info!("sent message!"),
+            Err(err) => info!(
+                "Have error trying to send this message: {:?} \n... error: {:?}",
+                reason, err
+            ),
         }
-        tokio_tungstenite::tungstenite::Message::Ping(_) => {
-            info!("Received ping message");
         }
-        tokio_tungstenite::tungstenite::Message::Pong(_) => {
-            info!("Received pong message");
+        tokio_tungstenite::tungstenite::Message::Ping(txt) => {
+            info!("Sending ping message");
+            match stream
+            .send(tokio_tungstenite::tungstenite::Message::Ping(
+                txt.clone(),
+            ))
+            .await
+        {
+            Ok(_) => info!("sent message!"),
+            Err(err) => info!(
+                "Have error trying to send this message: {:?} \n... error: {:?}",
+                txt, err
+            ),
+        }
+        }
+        tokio_tungstenite::tungstenite::Message::Pong(txt) => {
+            info!("Sending pong message");
             //
         }
     }
@@ -268,11 +292,7 @@ async fn game_loop(status_processer_notifier: tokio::sync::mpsc::Sender<u64>, ro
     }
 }
 
-async fn send_command_to_clients(
-    client_list: HashMap<uuid::Uuid, (Client, mpsc::Sender<Envelope>)>,
-    command: Command,
-) {
-}
+
 
 #[instrument]
 async fn server_global_state_manager(
@@ -297,7 +317,7 @@ async fn server_global_state_manager(
 
                         match game_notifier {
                             Some(current_round) => {
-                                info!("The new round is starting!! {} ", current_round);
+                                // info!("The new round is starting!! {} ", current_round);
                             }
                             None => {info!("none...");}
                         }
