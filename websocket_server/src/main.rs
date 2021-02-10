@@ -140,10 +140,16 @@ async fn establish_and_maintain_each_client_ws_connection(
         Command::ServerInitiated(this_client.clone()),
     );
 
-    tx_server_state_manager
+    match tx_server_state_manager
         .send((envelope, Some(goes_to_specific_ws_client_tx)))
         .await
-        .expect("The connection was closed before even getting to update the status within a system. The odds of this happening normally are extremely low... Like someone would have to connection and then almost instantaneously close the connection:[");
+        {
+            Ok(_) => {info!("Successfully added the new client to the server state manager!");}
+            Err(err) => {
+                info!("The connection was closed before even getting to update the status within a system. The odds of this happening normally are extremely low... Like someone would have to connection and then almost instantaneously close the connection:[... Failed with the following error: {:?}", err);
+                return
+            }
+        }
 
     let envelope = Envelope::new(
         EntityDetails::Server,
