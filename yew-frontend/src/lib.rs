@@ -505,11 +505,75 @@ async fn set_remote_webrtc_offer(
             match JsFuture::from(srd_promise).await {
                 Ok(
                 _) => {
-                    link.send_message(Msg::OverrideRtcPeer(local.clone()));
                     link.send_message(Msg::LogEvent(format!(
                         "Successfully set the remote webrtc offer!"
                     )));
-                    create_and_set_answer_locally(receiver, local, local_stream.clone(), link).await
+                    {
+
+                        link.send_message(Msg::LogEvent(format!(
+                            "attempting to create answer to offer...This is also where the local media stream/tracks will be connected to the RTCPeerConnection"
+                        )));
+                    
+                        link.send_message(Msg::LogEvent(format!("Maybe instead, we should try finding the pre-existing transceiver and setting the RtcRtpSender object's tracks to this one!")));
+
+
+                        // if let Some(my_stream) = &local_stream {
+                        //     for track in my_stream.clone().get_tracks().to_vec() {
+                        //         let track = track.dyn_into::<MediaStreamTrack>().unwrap();
+                    
+                        //         let transceiver: RtcRtpTransceiver =
+                        //             local.add_transceiver_with_media_stream_track(&track);
+                    
+                        //         transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
+                        //         link.send_message(Msg::OverrideRtcPeer(local.clone()));
+                        //     }
+                        //     link.send_message(Msg::LogEvent(format!("Added the local tracks")));
+                        // } else {
+                        //     link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
+                        // }
+                    
+                        let return_track_callback = return_track_added_callback(link.clone());
+                        local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
+                        return_track_callback.forget();
+                    
+                        let onicecandidate_callback = return_ice_callback(link.clone());
+                        local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
+                        onicecandidate_callback.forget();
+                    
+                        let answer = JsFuture::from(local.create_answer())
+                            .await
+                            .expect("couldn't create answer :[");
+                    
+                        unsafe {
+                            let answer_sdp = Reflect::get(&answer, &JsValue::from_str("sdp"))
+                                .expect("error making sdp answer...")
+                                .as_string()
+                                .expect("error converting to string");
+                           
+                            // let re = Regex::new(r"recvonly").unwrap();
+                            // let string: String = re.replace_all(&answer_sdp, "sendrecv").into();
+                    
+                    
+                    
+                            let mut answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
+                            answer_obj.sdp(&answer_sdp);
+                            let sld_promise = local.set_local_description(&answer_obj);
+                            match JsFuture::from(sld_promise).await {
+                                Ok(_) => {
+                                    link.send_message(Msg::SendSdpResponse(receiver, answer_sdp.clone()));
+                                    link.send_message(Msg::OverrideRtcPeer(local));
+                                }
+                                Err(err) => link.send_message(Msg::LogEvent(format!(
+                                    "Error while trying to submit the sdp answer: {:#?}",
+                                    err
+                                ))),
+                            }
+                        }
+
+
+
+
+                    }
                 }
                 Err(err) => link.send_message(Msg::LogEvent(format!("Error: {:#?}", err))),
             }
@@ -560,69 +624,7 @@ async fn set_remote_webrtc_answer(
     }
 }
 
-async fn create_and_set_answer_locally(
-    receiver: uuid::Uuid,
-    local: RtcPeerConnection,
-    local_stream: Option<MediaStream>,
-    link: ComponentLink<Model>,
-) {
-    link.send_message(Msg::LogEvent(format!(
-        "attempting to create answer to offer...This is also where the local media stream/tracks will be connected to the RTCPeerConnection"
-    )));
 
-    if let Some(my_stream) = &local_stream {
-        for track in my_stream.clone().get_tracks().to_vec() {
-            let track = track.dyn_into::<MediaStreamTrack>().unwrap();
-
-            let transceiver: RtcRtpTransceiver =
-                local.add_transceiver_with_media_stream_track(&track);
-
-            transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
-            link.send_message(Msg::OverrideRtcPeer(local.clone()));
-        }
-        link.send_message(Msg::LogEvent(format!("Added the local tracks")));
-    } else {
-        link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
-    }
-
-    let return_track_callback = return_track_added_callback(link.clone());
-    local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
-    return_track_callback.forget();
-
-    let onicecandidate_callback = return_ice_callback(link.clone());
-    local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
-    onicecandidate_callback.forget();
-
-    let answer = JsFuture::from(local.create_answer())
-        .await
-        .expect("couldn't create answer :[");
-
-    unsafe {
-        let answer_sdp = Reflect::get(&answer, &JsValue::from_str("sdp"))
-            .expect("error making sdp answer...")
-            .as_string()
-            .expect("error converting to string");
-       
-        // let re = Regex::new(r"recvonly").unwrap();
-        // let string: String = re.replace_all(&answer_sdp, "sendrecv").into();
-
-
-
-        let mut answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
-        answer_obj.sdp(&answer_sdp);
-        let sld_promise = local.set_local_description(&answer_obj);
-        match JsFuture::from(sld_promise).await {
-            Ok(_) => {
-                link.send_message(Msg::SendSdpResponse(receiver, answer_sdp.clone()));
-                link.send_message(Msg::OverrideRtcPeer(local));
-            }
-            Err(err) => link.send_message(Msg::LogEvent(format!(
-                "Error while trying to submit the sdp answer: {:#?}",
-                err
-            ))),
-        }
-    }
-}
 
 async fn set_local_webrtc_offer(
     offer_sdp: String,
