@@ -504,9 +504,17 @@ async fn server_global_state_manager(
                                             }
                                         }
                                         None => {
-                                            info!("This is bad...Need to make custom error messages. I think messages could have statuses too...");
 
-                                            panic!("At the disco");
+                                            info!("Need to remove the client from the list of online clients");
+
+                                            let connection_closed = Envelope::new(
+                                                EntityDetails::Server,
+                                                EntityDetails::Server,
+                                                None,
+                                                Command::ClosedConnection(receiver_uuid)
+                                            );
+
+                                            global_state_update_sender.send((connection_closed, None)).await.expect("This should absolutely not fail... ^_^ I'm so sorry I failed you future self.");
                                         }
                                     }
                                 }
