@@ -1122,7 +1122,7 @@ impl Component for Model {
         html! {
             <div>
             // <h1> {"Local Video"} </h1>
-            <video  width="320" height="240" muted=true autoplay=true controls=true ref=self.local_video.clone()> </video>
+            <video  width="320" height="240" autoplay=true controls=true ref=self.local_video.clone()> </video>
 
 
             // <h1> "Remote Video" </h1>
