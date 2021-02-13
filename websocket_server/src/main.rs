@@ -127,6 +127,7 @@ async fn establish_and_maintain_each_client_ws_connection(
         email: None,
         user_id: uuid::Uuid::new_v4(),
         current_socket_addr: address,
+        status: Some(models::Status::WaitingForPartner),
     };
 
     let mut ws_stream = tokio_tungstenite::accept_async(stream)

@@ -12,6 +12,60 @@ pub struct Client {
     pub user_id: uuid::Uuid,
     // This will only be set to None if the websocket connection is not yet initialized... Not sure this ever actually happens?
     pub current_socket_addr: Option<SocketAddr>,
+    pub status : Option<Status>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Eq, Hash, Clone)]
+pub enum Status {
+    InCall(Uuid, Uuid),
+    WaitingForPartner,
+    AnsweringQuestionAboutLastPartner
+}
+
+impl PartialEq for Status {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            Status::InCall(_a,_b) => {
+                match other {
+                    Status::InCall(_c, _d) => {
+                        true
+                    }
+                    Status::WaitingForPartner => {
+                        false
+                    }
+                    Status::AnsweringQuestionAboutLastPartner => {
+                        false
+                    }
+                }
+            }
+            Status::WaitingForPartner => {
+                match other {
+                    Status::InCall(_c, _d) => {
+                        false
+                    }
+                    Status::WaitingForPartner => {
+                        true
+                    }
+                    Status::AnsweringQuestionAboutLastPartner => {
+                        false
+                    }
+                }
+            }
+            Status::AnsweringQuestionAboutLastPartner => {
+                match other {
+                    Status::InCall(_c, _d) => {
+                        false
+                    }
+                    Status::WaitingForPartner => {
+                        false
+                    }
+                    Status::AnsweringQuestionAboutLastPartner => {
+                        true
+                    }
+                }
+            }
+        }
+    }
 }
 
 impl PartialEq for Client {
@@ -28,6 +82,7 @@ impl Client {
             user_id,
             email: None,
             current_socket_addr: None,
+            status : None
         }
     }
 
