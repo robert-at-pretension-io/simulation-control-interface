@@ -453,7 +453,7 @@ fn return_track_added_callback(
     }) as Box<dyn FnMut(RtcTrackEvent)>)
 }
 
-fn set_webrtc_callbacks(local : RtcPeerConnection, link : Scope<Model>) -> RtcPeerConnection {
+fn set_webrtc_callbacks(local : RtcPeerConnection, link : ComponentLink<Model>) -> RtcPeerConnection {
     let onicecandidate_callback = return_ice_callback(link.clone());
     local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
     onicecandidate_callback.forget();
