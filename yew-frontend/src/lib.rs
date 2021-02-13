@@ -19,7 +19,7 @@ use std::{clone, net::SocketAddr};
 use std::collections::HashSet;
 
 // all of these are for webrtc
-use js_sys::Reflect;
+use js_sys::{Array, Reflect};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack, MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer, RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver, RtcRtpSender, RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit, RtcSignalingState, RtcTrackEvent, WebSocket, Window};
@@ -316,13 +316,7 @@ impl Model {
                     "Now to attach the tracks to the stream!"
                 )));
 
-                let onicecandidate_callback = return_ice_callback(cloned_link.clone());
-                client.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
-                onicecandidate_callback.forget();
-
-                let return_track_callback = return_track_added_callback(cloned_link.clone());
-                client.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
-                return_track_callback.forget();
+                let client = set_webrtc_callbacks(client, cloned_link.clone());
 
                 if let Some(my_stream) = &self.local_stream {
                     for track in my_stream.clone().get_tracks().to_vec() {
@@ -459,6 +453,18 @@ fn return_track_added_callback(
     }) as Box<dyn FnMut(RtcTrackEvent)>)
 }
 
+fn set_webrtc_callbacks(local : RtcPeerConnection, link : Scope<Model>) -> RtcPeerConnection {
+    let onicecandidate_callback = return_ice_callback(link.clone());
+    local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
+    onicecandidate_callback.forget();
+
+    let return_track_callback = return_track_added_callback(link.clone());
+    local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
+    return_track_callback.forget();
+
+    local
+}
+
 async fn set_remote_webrtc_offer(
     remote_sdp: String,
     receiver: uuid::Uuid,
@@ -488,15 +494,8 @@ async fn set_remote_webrtc_offer(
         Ok(local) => {
             link.send_message(Msg::LogEvent(format!("successfully setup stun server!")));
 
-            let onicecandidate_callback = return_ice_callback(link.clone());
-            local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
-            onicecandidate_callback.forget();
+            let local = set_webrtc_callbacks(local, link.clone());
 
-            let return_track_callback = return_track_added_callback(link.clone());
-            local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
-            return_track_callback.forget();
-
-            // This is now where the code for sending a response goes...
 
             let mut offer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Offer);
 
@@ -517,28 +516,34 @@ async fn set_remote_webrtc_offer(
                         link.send_message(Msg::LogEvent(format!("Maybe instead, we should try finding the pre-existing transceiver and setting the RtcRtpSender object's tracks to this one!")));
 
 
-                        // if let Some(my_stream) = &local_stream {
-                        //     for track in my_stream.clone().get_tracks().to_vec() {
-                        //         let track = track.dyn_into::<MediaStreamTrack>().unwrap();
+                        // for transceiver in local.get_transceivers().to_vec(){
+                        //     let transceiver = transceiver.dyn_into::<RtcRtpTransceiver>().unwrap();
+                        // } 
+
+
+                        if let Some(my_stream) = &local_stream {
+                            for track in my_stream.clone().get_tracks().to_vec() {
+                                let track = track.dyn_into::<MediaStreamTrack>().unwrap();
                     
-                        //         let transceiver: RtcRtpTransceiver =
-                        //             local.add_transceiver_with_media_stream_track(&track);
+                                // let transceiver: RtcRtpTransceiver =
+                                //     local.add_transceiver_with_media_stream_track(&track);
                     
-                        //         transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
-                        //         link.send_message(Msg::OverrideRtcPeer(local.clone()));
-                        //     }
-                        //     link.send_message(Msg::LogEvent(format!("Added the local tracks")));
-                        // } else {
-                        //     link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
-                        // }
+                                // transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
+                                // link.send_message(Msg::OverrideRtcPeer(local.clone()));
+                                local.add_track(&track, &my_stream, &Array::new());
+                            }
+                            link.send_message(Msg::LogEvent(format!("Added the local tracks")));
+                        } else {
+                            link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
+                        }
                     
-                        let return_track_callback = return_track_added_callback(link.clone());
-                        local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
-                        return_track_callback.forget();
+                        // let return_track_callback = return_track_added_callback(link.clone());
+                        // local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
+                        // return_track_callback.forget();
                     
-                        let onicecandidate_callback = return_ice_callback(link.clone());
-                        local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
-                        onicecandidate_callback.forget();
+                        // let onicecandidate_callback = return_ice_callback(link.clone());
+                        // local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
+                        // onicecandidate_callback.forget();
                     
                         let answer = JsFuture::from(local.create_answer())
                             .await
