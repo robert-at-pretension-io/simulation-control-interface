@@ -4,6 +4,7 @@ use tokio::{
     net::{TcpListener, TcpStream},
     sync::mpsc::Receiver,
     sync::mpsc::Sender,
+    sync::Mutex
 };
 
 use futures_util::sink::SinkExt;
@@ -26,7 +27,7 @@ use std::{
 use log::info;
 use tracing::{instrument, Level};
 
-use models::{Client, Command, EntityDetails, EntityTypes, Envelope};
+use models::{Client, Command, EntityDetails, EntityTypes, Envelope, PingStatus};
 
 use native_tls::Identity;
 use tokio_native_tls::native_tls;
@@ -128,6 +129,7 @@ async fn establish_and_maintain_each_client_ws_connection(
         user_id: uuid::Uuid::new_v4(),
         current_socket_addr: address,
         status: Some(models::Status::WaitingForPartner),
+        ping_status : PingStatus::NeverPinged
     };
 
     let mut ws_stream = tokio_tungstenite::accept_async(stream)
@@ -202,7 +204,7 @@ async fn establish_and_maintain_each_client_ws_connection(
                                             match tx_server_state_manager.send((control_message, None)).await
                                             {
                                                 Ok(_) => {},
-                                                Err(err) => {info!("Received the following error: {:?}", err)}
+                                                Err(err) => {info!("Received the following error: {:?}. This is an error with trying to connect to the server state manager... Not sure how to recover from this one :[", err);}
 
                                             }
                                         },
@@ -211,6 +213,22 @@ async fn establish_and_maintain_each_client_ws_connection(
                                 },
                                 Message::Close(_reason) => {
                                     info!("Close message received");
+
+
+                                    let envelope = Envelope::new(
+                                        EntityDetails::Client(this_client.user_id.clone()),
+                                        EntityDetails::Server,
+                                        None,
+                                        Command::ClosedConnection(this_client.user_id.clone())
+                                    );
+                
+                                    match tx_server_state_manager
+                                        .send((envelope,None))
+                                        .await {
+                                            Ok(_) => {info!("successfully closed/removed the connection!"); },
+                                            Err(err) => {info!("Had the following error while trying to send a ClosedConnection command to the tx_server_state_manager:\n {:?}", err);}
+                                        }
+
                                     return
 
 
@@ -308,7 +326,7 @@ async fn server_global_state_manager(
 ) {
     // the global_state_update_sender is the mechanism by which the sever gives itself commands
 
-    let mut online_connections = HashMap::<uuid::Uuid, (Client, mpsc::Sender<Envelope>)>::new();
+    let mut online_connections = Mutex::new(HashMap::<uuid::Uuid, (Client, mpsc::Sender<Envelope>)>::new());
 
     let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<u64>(10);
 
@@ -324,7 +342,75 @@ async fn server_global_state_manager(
 
                         match game_notifier {
                             Some(current_round) => {
-                                // info!("The new round is starting!! {} ", current_round);
+                                let mut online_connections = online_connections.lock().await;
+                                
+                                let ping_every_x_rounds : u64 = 3;
+                                
+                                
+                                let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+
+                                let mut ping_list = HashMap::<uuid::Uuid, Envelope>::new();
+
+                                for client in clients {
+                                    match client.ping_status {
+                                        PingStatus::Pinged(_) => {
+                                            info!("This client {:#?} seems unresponsive :[", client);
+                                        }
+                                        PingStatus::NeverPinged => {
+                                            let ping = Envelope::new(
+                                                EntityDetails::Server,
+                                                EntityDetails::Client(client.user_id),
+                                                None,
+                                                Command::Ping(client.user_id, current_round)
+                                            );
+
+                                            ping_list.insert(client.user_id, ping);
+
+
+                                        }
+                                        PingStatus::Ponged(round_number) => {
+                                            if (round_number - current_round) > ping_every_x_rounds || (current_round - round_number) > ping_every_x_rounds {
+                                                let ping = Envelope::new(
+                                                    EntityDetails::Server,
+                                                    EntityDetails::Client(client.user_id),
+                                                    None,
+                                                    Command::Ping(client.user_id, current_round)
+                                                );
+                                                ping_list.insert(client.user_id, ping);
+                                            }
+                                        }
+                                    }
+                                }
+
+
+                                for (client_uuid, ping_envelope) in ping_list {
+                                    match online_connections.get_mut(&client_uuid) {
+                                        Some((client, client_sender)) => {
+                                            
+                                            match client_sender.send(ping_envelope).await {
+                                                Ok(_) => {
+                                                    client.ping_status = PingStatus::Ponged(current_round);
+                                                }
+                                                Err(err) => {
+                                                    info!("Was not able to send the ping to the client. Recieved the following error: {:#?}", err);
+                                                }
+                                                
+                                            }
+                                        }
+                                        None => {}
+}
+                                }
+
+                                // let clients = clients.clone();
+    
+                                // let keys : HashSet<uuid::Uuid> =  online_connections.keys().cloned().collect();
+    
+                                // for uuid in keys  {
+                                //     let clients = clients.clone();
+                                //     send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
+                                // }
+                                
+    
                             }
                             None => {info!("none...");}
                         }
@@ -338,8 +424,25 @@ async fn server_global_state_manager(
                     let first_clone = control_message.clone();
 
                         if control_message.receiver.entity_type == EntityTypes::Server {
-                            match control_message.command {
 
+                            
+                            match control_message.command {
+                                Command::Ping(client, round) => {
+                                    info!("The server should not be implementing the ping...");
+
+                                }
+                                Command::Pong(client, round) => {
+                                    let mut online_connections = online_connections.lock().await;
+                                    match online_connections.get_mut(&client){
+    Some((client, client_sender)) => {
+        client.ping_status = PingStatus::Ponged(round);
+        
+    }
+    None => {
+        info!("This is not good... The client is responding to a ping but it has already been removed from the online_client list");
+    }
+}
+                                }
                                 Command::IceCandidate(_) => {
                                     info!("The server should not be receiving ice candidates.");
                                 }
@@ -374,6 +477,9 @@ async fn server_global_state_manager(
                             }
                             let client_id = client.user_id;
 
+                            let mut online_connections = online_connections.lock().await;
+
+
                             online_connections.insert(client_id, (client, client_connection));
 
                             let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
@@ -390,6 +496,7 @@ async fn server_global_state_manager(
 
                         }
                         Command::ClientInfo(client) => {
+                            let mut online_connections = online_connections.lock().await;
 
                                     info!("received the following updated client info: {:?}", client);
                                     match online_connections.get_mut(&client.user_id) {
@@ -429,6 +536,10 @@ async fn server_global_state_manager(
                         }
                         Command::ReadyForPartner(client) => {
                             info!("{:?} would like to get partner please", client.user_id);
+
+                            let mut online_connections = online_connections.lock().await;
+
+
                             let ( clients, _) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
 
@@ -436,6 +547,10 @@ async fn server_global_state_manager(
 
                         }
                         Command::ClosedConnection(client) => {
+
+                            let mut online_connections = online_connections.lock().await;
+
+
                             info!("Before closing the connection the online connections are: {:?}", online_connections.clone());
                             {
                             match online_connections.remove_entry(&client){
@@ -483,6 +598,10 @@ async fn server_global_state_manager(
 
                                 //pass the message to the receiver
                                 if let EntityDetails::Client(receiver_uuid) = control_message.receiver.entity_detail {
+
+                                    let mut online_connections = online_connections.lock().await;
+
+
                                     match online_connections.get_mut(&receiver_uuid){
                                         Some((client, client_channel)) => {
                                             info!("Trying to re-route the message to the appropriate client.");

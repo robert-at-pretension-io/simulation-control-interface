@@ -11,7 +11,7 @@ use yew::prelude::*;
 use yew::ComponentLink;
 
 // This local trait is for shared objects between the frontend and the backend
-use models::{Client, Command, EntityDetails, Envelope};
+use models::{Client, Command, EntityDetails, Envelope, PingStatus, Status};
 
 use core::borrow;
 use std::{clone, net::SocketAddr};
@@ -39,6 +39,7 @@ static WEBSOCKET_URL: &str = "wss://liminalnook.com:2096";
 static STUN_SERVER: &str = "stun:stun.l.google.com:19302";
 
 struct Model {
+    round_number : Option<u64>,
     local_stream: Option<MediaStream>,
     remote_stream: Option<MediaStream>,
     local_video: NodeRef,
@@ -48,6 +49,8 @@ struct Model {
     connection_socket_address: Option<SocketAddr>,
     user_id: Option<uuid::Uuid>,
     username: Option<String>,
+    status : Option<Status>,
+    ping_status: PingStatus,
     partner: Option<Uuid>,
     link: ComponentLink<Self>,
     websocket: Option<WebSocket>,
@@ -111,6 +114,7 @@ enum Msg {
     EndWebsocketConnection,
     RequestUsersOnline(Client),
     SendWsMessage(Envelope),
+    Ping(u64),
 }
 
 extern crate web_sys;
@@ -120,6 +124,8 @@ impl Model {
         self.connection_socket_address = client.current_socket_addr;
         self.username = client.username;
         self.user_id = Some(client.user_id);
+        self.ping_status = client.ping_status;
+        self.status = client.status;
     }
 
     fn show_welcome_message(&self) -> Html {
@@ -223,6 +229,14 @@ impl Model {
                                     "Received the following error: {}",
                                     error,
                                 )));
+                            }
+                            Command::Pong(_,_) => {
+                                cloned.send_message(Msg::LogEvent(format!("The server will never pong the client.. that's absolutely improper")));
+                            }
+                            Command::Ping(_client, round_number) => {
+                                cloned.send_message(Msg::LogEvent(format!("Received a ping from the server")));
+                                cloned.send_message(Msg::Ping(round_number));
+                                
                             }
                             Command::ServerInitiated(client) => {
                                 let messages = vec![
@@ -651,6 +665,7 @@ impl Component for Model {
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         Model {
+            round_number : None,
             local_web_rtc_connection: None,
             link,
             local_stream: None,
@@ -667,11 +682,28 @@ impl Component for Model {
             partner: None,
             peers: HashSet::<Client>::new(),
             states: HashSet::<State>::new(),
+            status: None,
+            ping_status: PingStatus::NeverPinged,
         }
     }
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::Ping(round_number) => {
+                let pong = Envelope::new(
+                    EntityDetails::Client(self.user_id.unwrap()),
+                    EntityDetails::Server,
+                    None,
+                    Command::Pong(self.user_id.unwrap(), round_number)
+                );
+                self.round_number = Some(round_number);
+
+                self.link.send_message(Msg::SendWsMessage(pong));
+                self.link.send_message(Msg::LogEvent(format!("Ponged the server... Current round is {}", round_number)));
+
+                true
+            }
+
             Msg::MaxLogSize => {
                 self.event_log_length = self.event_log.len();
 
@@ -910,6 +942,8 @@ impl Component for Model {
                         user_id: user_id.clone(),
                         username: Some(username),
                         current_socket_addr: None,
+                        status: Some(Status::WaitingForPartner),
+                        ping_status: PingStatus::NeverPinged
                     }),
                 );
 

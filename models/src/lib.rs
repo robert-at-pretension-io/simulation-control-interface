@@ -13,6 +13,7 @@ pub struct Client {
     // This will only be set to None if the websocket connection is not yet initialized... Not sure this ever actually happens?
     pub current_socket_addr: Option<SocketAddr>,
     pub status : Option<Status>,
+    pub ping_status : PingStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize, Eq, Hash, Clone)]
@@ -82,7 +83,8 @@ impl Client {
             user_id,
             email: None,
             current_socket_addr: None,
-            status : None
+            status : None, 
+            ping_status : PingStatus::NeverPinged
         }
     }
 
@@ -94,6 +96,45 @@ impl Client {
             Ok(())
         } else {
             Err(format!("The new client did not equal the old one!"))
+        }
+    }
+
+}
+#[derive(Debug, Serialize, Deserialize, Eq, Hash, Clone)]
+///This enum will be used for keeping the connections alive and informing the clients of the round number
+pub enum PingStatus {
+    /// This is when the client has last been communicated with, the u64 value refers to the round number
+    Pinged(u64),
+    /// This is the state that all new clients to the system will be put into
+    NeverPinged,
+    /// This will be the response that a client gives
+    Ponged(u64)
+}
+
+impl PartialEq for PingStatus {
+    fn eq(&self, other: &PingStatus) -> bool {
+        match self {
+            PingStatus::Pinged(a) => {
+                match other {
+                    PingStatus::Pinged(c) => {if a == c {true} else {false}}
+                    PingStatus::NeverPinged => {false}
+                    PingStatus::Ponged(d) => {false}
+                }
+            }
+            PingStatus::NeverPinged => {
+                match other {
+                    PingStatus::Pinged(c) => { false }
+                    PingStatus::NeverPinged => {true}
+                    PingStatus::Ponged(d) => {false}
+                }
+            }
+            PingStatus::Ponged(a) => {
+                match other {
+                    PingStatus::Pinged(c) => { false}
+                    PingStatus::NeverPinged => {false }
+                    PingStatus::Ponged(d) => {if a == d {true} else {false}}
+                }
+            }
         }
     }
 }
@@ -160,6 +201,10 @@ pub enum Command {
     AckClosedConnection(uuid::Uuid),
     /// Ice Candidate used for supporting a webrtc connection channel
     IceCandidate(String),
+    /// Websocket Ping
+    Ping(Uuid, u64),
+    /// Websocket Pong
+    Pong(Uuid, u64)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
