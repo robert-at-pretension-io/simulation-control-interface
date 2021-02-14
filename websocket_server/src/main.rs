@@ -329,7 +329,7 @@ async fn server_global_state_manager(
 
     let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<u64>(10);
 
-    tokio::spawn(async move { game_loop(status_processer_notifier_tx, 60).await });
+    tokio::spawn(async move { game_loop(status_processer_notifier_tx, 10).await });
 
     let current_round = 0;
 
@@ -343,7 +343,8 @@ async fn server_global_state_manager(
                                     Some(current_round) => {
                                         let mut online_connections = online_connections.lock().await;
 
-                                        let ping_every_x_rounds : u64 = 3;
+                                        let ping_every_x_rounds : u64 = 2;
+                                        let remove_after_x_rounds : u64 = 4;
 
 
                                         let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
@@ -352,8 +353,20 @@ async fn server_global_state_manager(
 
                                         for client in clients {
                                             match client.ping_status {
-                                                PingStatus::Pinged(_) => {
-                                                    info!("This client {:#?} seems unresponsive :[", client);
+                                                PingStatus::Pinged(round_number) => {
+                                                    info!("This client {:#?} seems unresponsive :[... put the logic to remove them from the list here!", client);
+
+                                                    // if (current_round - round_number )> remove_after_x_rounds{
+                                                    //     let ping = Envelope::new(
+                                                    //         EntityDetails::Server,
+                                                    //         EntityDetails::Client(client.user_id),
+                                                    //         None,
+                                                    //         Command::Ping(client.user_id, current_round)
+                                                    //     );
+                                                    //     ping_list.insert(client.user_id, ping);
+                                                    // }
+
+
                                                 }
                                                 PingStatus::NeverPinged => {
                                                     let ping = Envelope::new(
@@ -388,7 +401,7 @@ async fn server_global_state_manager(
 
                                                     match client_sender.send(ping_envelope).await {
                                                         Ok(_) => {
-                                                            client.ping_status = PingStatus::Ponged(current_round);
+                                                            client.ping_status = PingStatus::Pinged(current_round);
                                                         }
                                                         Err(err) => {
                                                             info!("Was not able to send the ping to the client. Recieved the following error: {:#?}", err);
