@@ -12,59 +12,35 @@ pub struct Client {
     pub user_id: uuid::Uuid,
     // This will only be set to None if the websocket connection is not yet initialized... Not sure this ever actually happens?
     pub current_socket_addr: Option<SocketAddr>,
-    pub status : Option<Status>,
-    pub ping_status : PingStatus,
+    pub status: Option<Status>,
+    pub ping_status: PingStatus,
 }
 
 #[derive(Debug, Serialize, Deserialize, Eq, Hash, Clone)]
 pub enum Status {
     InCall(Uuid, Uuid),
     WaitingForPartner,
-    AnsweringQuestionAboutLastPartner
+    AnsweringQuestionAboutLastPartner,
 }
 
 impl PartialEq for Status {
     fn eq(&self, other: &Self) -> bool {
         match self {
-            Status::InCall(_a,_b) => {
-                match other {
-                    Status::InCall(_c, _d) => {
-                        true
-                    }
-                    Status::WaitingForPartner => {
-                        false
-                    }
-                    Status::AnsweringQuestionAboutLastPartner => {
-                        false
-                    }
-                }
-            }
-            Status::WaitingForPartner => {
-                match other {
-                    Status::InCall(_c, _d) => {
-                        false
-                    }
-                    Status::WaitingForPartner => {
-                        true
-                    }
-                    Status::AnsweringQuestionAboutLastPartner => {
-                        false
-                    }
-                }
-            }
-            Status::AnsweringQuestionAboutLastPartner => {
-                match other {
-                    Status::InCall(_c, _d) => {
-                        false
-                    }
-                    Status::WaitingForPartner => {
-                        false
-                    }
-                    Status::AnsweringQuestionAboutLastPartner => {
-                        true
-                    }
-                }
-            }
+            Status::InCall(_a, _b) => match other {
+                Status::InCall(_c, _d) => true,
+                Status::WaitingForPartner => false,
+                Status::AnsweringQuestionAboutLastPartner => false,
+            },
+            Status::WaitingForPartner => match other {
+                Status::InCall(_c, _d) => false,
+                Status::WaitingForPartner => true,
+                Status::AnsweringQuestionAboutLastPartner => false,
+            },
+            Status::AnsweringQuestionAboutLastPartner => match other {
+                Status::InCall(_c, _d) => false,
+                Status::WaitingForPartner => false,
+                Status::AnsweringQuestionAboutLastPartner => true,
+            },
         }
     }
 }
@@ -83,8 +59,8 @@ impl Client {
             user_id,
             email: None,
             current_socket_addr: None,
-            status : None, 
-            ping_status : PingStatus::NeverPinged
+            status: None,
+            ping_status: PingStatus::NeverPinged,
         }
     }
 
@@ -98,7 +74,6 @@ impl Client {
             Err(format!("The new client did not equal the old one!"))
         }
     }
-
 }
 #[derive(Debug, Serialize, Deserialize, Eq, Hash, Clone)]
 ///This enum will be used for keeping the connections alive and informing the clients of the round number
@@ -108,33 +83,39 @@ pub enum PingStatus {
     /// This is the state that all new clients to the system will be put into
     NeverPinged,
     /// This will be the response that a client gives
-    Ponged(u64)
+    Ponged(u64),
 }
 
 impl PartialEq for PingStatus {
     fn eq(&self, other: &PingStatus) -> bool {
         match self {
-            PingStatus::Pinged(a) => {
-                match other {
-                    PingStatus::Pinged(c) => {if a == c {true} else {false}}
-                    PingStatus::NeverPinged => {false}
-                    PingStatus::Ponged(d) => {false}
+            PingStatus::Pinged(a) => match other {
+                PingStatus::Pinged(c) => {
+                    if a == c {
+                        true
+                    } else {
+                        false
+                    }
                 }
-            }
-            PingStatus::NeverPinged => {
-                match other {
-                    PingStatus::Pinged(c) => { false }
-                    PingStatus::NeverPinged => {true}
-                    PingStatus::Ponged(d) => {false}
+                PingStatus::NeverPinged => false,
+                PingStatus::Ponged(d) => false,
+            },
+            PingStatus::NeverPinged => match other {
+                PingStatus::Pinged(c) => false,
+                PingStatus::NeverPinged => true,
+                PingStatus::Ponged(d) => false,
+            },
+            PingStatus::Ponged(a) => match other {
+                PingStatus::Pinged(c) => false,
+                PingStatus::NeverPinged => false,
+                PingStatus::Ponged(d) => {
+                    if a == d {
+                        true
+                    } else {
+                        false
+                    }
                 }
-            }
-            PingStatus::Ponged(a) => {
-                match other {
-                    PingStatus::Pinged(c) => { false}
-                    PingStatus::NeverPinged => {false }
-                    PingStatus::Ponged(d) => {if a == d {true} else {false}}
-                }
-            }
+            },
         }
     }
 }
@@ -204,7 +185,7 @@ pub enum Command {
     /// Websocket Ping
     Ping(Uuid, u64),
     /// Websocket Pong
-    Pong(Uuid, u64)
+    Pong(Uuid, u64),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
