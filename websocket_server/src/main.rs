@@ -706,7 +706,9 @@ async fn server_global_state_manager(
             Ok(_) => {
                 info!("sending message to end call to myself...")
             }
-            Err(_) => {}
+            Err(err) => {
+                info!("Received the following error {:#?}", err);
+            }
         }
                                                                             }
                                                                             Command::SdpRequest(_sdp) => {
