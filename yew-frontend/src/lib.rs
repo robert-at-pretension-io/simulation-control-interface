@@ -27,7 +27,7 @@ use web_sys::{
     RtcIceCandidateInit, 
     RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver, 
     RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit,
-     RtcTrackEvent, WebSocket, 
+     RtcTrackEvent, WebSocket, RtcIceConnectionState
 };
 
 use console_error_panic_hook;
@@ -758,6 +758,27 @@ impl Component for Model {
                         .local_web_rtc_connection
                         .clone()
                         .expect("error unwraping the local_web_rtc_connection");
+
+                        match local.ice_connection_state() {
+                            RtcIceConnectionState::New => {},
+                            RtcIceConnectionState::Checking => {},
+                            RtcIceConnectionState::Connected => {
+                                self.link.send_message(Msg::AddState(State::ConnectedToRtcPeer))
+                            },
+                            RtcIceConnectionState::Completed => {
+                                self.link.send_message(Msg::AddState(State::ConnectedToRtcPeer))
+                            },
+                            RtcIceConnectionState::Failed => {},
+                            RtcIceConnectionState::Disconnected => {
+                                self.link.send_message(Msg::RemoveState(State::ConnectedToRtcPeer))
+                            },
+                            RtcIceConnectionState::Closed => {
+                                self.link.send_message(Msg::RemoveState(State::ConnectedToRtcPeer))
+                            },
+                            _ => {}
+                        }
+
+
                     self.link.send_message(Msg::LogEvent(format!("::RTC Connection Status::\nIce Connection State: {:#?}\nSignaling State: {:#?}\nIce Gathering State: {:#?}", local.ice_connection_state(), local.signaling_state(), local.ice_gathering_state())));
                     true
                 } else {
@@ -1184,8 +1205,25 @@ impl Component for Model {
 
 
                 {self.show_events_in_table() }
+
+
+                <div>
+                <h1> {"States of the system (can contain multiple values concurrently):"} </h1>
+                {
+                    for self.states.iter().map(|state| {
+                        html!(
+
+                            <p> {format!("{:#?}", state)} </p>
+                        )
+
+                })
+
+                }
                 </div>
 
+                </div>
+
+                
 
                 {
                     if (!self.states.contains(&State::ConnectedToWebsocketServer)){
