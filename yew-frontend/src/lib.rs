@@ -13,7 +13,7 @@ use yew::ComponentLink;
 // This local trait is for shared objects between the frontend and the backend
 use models::{Client, Command, EntityDetails, Envelope, PingStatus, Status};
 
-use std::{ net::SocketAddr};
+use std::net::SocketAddr;
 
 use std::collections::HashSet;
 
@@ -22,18 +22,15 @@ use js_sys::{Array, Reflect};
 
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{
-     HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack,
-     MessageEvent,  RtcConfiguration, RtcIceCandidate,
-    RtcIceCandidateInit, 
-    RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver, 
+    HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack,
+    MessageEvent, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState,
+    RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver,
     RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit,
-     RtcTrackEvent, WebSocket, RtcIceConnectionState
+    RtcTrackEvent, WebSocket,
 };
 
 use console_error_panic_hook;
 use std::panic;
-
-
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 enum State {
@@ -52,7 +49,7 @@ struct Model {
     remote_video: NodeRef,
     event_log: Vec<String>,
     event_log_length: usize,
-    server_model_of_client : Option<Client>,
+    server_model_of_client: Option<Client>,
     connection_socket_address: Option<SocketAddr>,
     user_id: Option<uuid::Uuid>,
     username: Option<String>,
@@ -91,9 +88,10 @@ enum Msg {
     IncreaseLogSize,
     DecreaseLogSize,
     MaxLogSize,
-MinLogSize,
+    MinLogSize,
     SetLocalMediaStream,
 
+    RequestClientBroadcast,
     SetupWebRtc(),
     StoreMediaStream(MediaStream),
     ReceivedIceCandidate(String),
@@ -130,16 +128,13 @@ MinLogSize,
 extern crate web_sys;
 
 impl Model {
-    fn client_to_model(&mut self, client: Client, link : Option<ComponentLink<Model>>) {
-
+    fn client_to_model(&mut self, client: Client, link: Option<ComponentLink<Model>>) {
         let old_status = self.status.clone();
         let new_status = client.status.clone();
 
         if old_status != new_status {
-            match link{
-                Some(link) => {
-
-                },
+            match link {
+                Some(link) => {}
                 None => {
                     panic!();
                 }
@@ -190,7 +185,7 @@ impl Model {
         let client_clone = client.clone();
         let client_clone2 = client.clone();
 
-        let mut disable_button : bool = true;
+        let mut disable_button: bool = true;
 
         if client.status.is_some() {
             if client.status.clone().unwrap() == models::Status::WaitingForPartner {
@@ -222,8 +217,10 @@ impl Model {
                         let sender = result.sender;
                         let receiver = result.receiver;
                         match result.command {
-                            Command::EndCall(_,_) => {
-                                cloned.send_message(Msg::LogEvent(format!("Really don't need to do anything here!")));
+                            Command::EndCall(_, _) => {
+                                cloned.send_message(Msg::LogEvent(format!(
+                                    "Really don't need to do anything here!"
+                                )));
                             }
                             Command::Error(error) => {
                                 cloned.send_message(Msg::LogEvent(format!(
@@ -249,7 +246,7 @@ impl Model {
                                     Msg::SetClient(client.clone()),
                                     Msg::AddState(State::ConnectedToWebsocketServer),
                                     Msg::SetupWebRtc(),
-                                    // Msg::RequestUsersOnline(client),
+                                    Msg::RequestClientBroadcast,
                                 ];
                                 cloned.send_message_batch(messages);
                             }
@@ -268,7 +265,6 @@ impl Model {
                             //         "Ready for partner acknowledged by server"
                             //     )));
                             // }
-
                             Command::SdpRequest(request) => {
                                 cloned.send_message(Msg::MakeSdpResponse(
                                     request,
@@ -446,14 +442,13 @@ fn return_ice_callback(
     Closure::wrap(
         Box::new(move |ev: RtcPeerConnectionIceEvent| match ev.candidate() {
             Some(candidate) => {
-                if candidate.candidate().len() > 0
-{
-                cloned_link.send_message(Msg::LogEvent(format!(
-                    "This client made an ice candidate: {:#?}",
-                    candidate.candidate()
-                )));
-                cloned_link.send_message(Msg::AddLocalIceCandidate(candidate.candidate()));}
-
+                if candidate.candidate().len() > 0 {
+                    cloned_link.send_message(Msg::LogEvent(format!(
+                        "This client made an ice candidate: {:#?}",
+                        candidate.candidate()
+                    )));
+                    cloned_link.send_message(Msg::AddLocalIceCandidate(candidate.candidate()));
+                }
             }
             None => {
                 cloned_link.send_message(Msg::LogEvent(format!("Done getting ice candidates")));
@@ -691,18 +686,27 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::RequestClientBroadcast => {
+                let request = Envelope::new(
+                    EntityDetails::Client(self.user_id),
+                    EntityDetails::Server,
+                    None,
+                    Command::BroadcastUpdate,
+                );
+
+                self.link.send_message(Msg::SendWsMessage(request));
+                true
+            }
 
             Msg::StatusChanged(old, new) => {
                 match new {
-                    Some(status) => {
-                        match status {
-                            Status::InCall(_, _) => {}
-                            Status::WaitingForPartner => {
-                                self.link.send_message(Msg::ClosedWebRtcConnection);
-                            }
-                            Status::AnsweringQuestionAboutLastPartner => {}
+                    Some(status) => match status {
+                        Status::InCall(_, _) => {}
+                        Status::WaitingForPartner => {
+                            self.link.send_message(Msg::ClosedWebRtcConnection);
                         }
-                    }
+                        Status::AnsweringQuestionAboutLastPartner => {}
+                    },
                     None => {
                         self.link.send_message(Msg::ResetPage);
                     }
@@ -743,10 +747,8 @@ impl Component for Model {
                     EntityDetails::Client(me.clone()),
                     EntityDetails::Client(peer.clone()),
                     Some(EntityDetails::Server),
-                        Command::EndCall(me,peer)
+                    Command::EndCall(me, peer),
                 );
-
-
 
                 self.send_ws_message(close_msg);
 
@@ -803,25 +805,24 @@ impl Component for Model {
                         .clone()
                         .expect("error unwraping the local_web_rtc_connection");
 
-                        match local.ice_connection_state() {
-                            RtcIceConnectionState::New => {},
-                            RtcIceConnectionState::Checking => {},
-                            RtcIceConnectionState::Connected => {
-                                self.link.send_message(Msg::AddState(State::ConnectedToRtcPeer))
-                            },
-                            RtcIceConnectionState::Completed => {
-                                self.link.send_message(Msg::AddState(State::ConnectedToRtcPeer))
-                            },
-                            RtcIceConnectionState::Failed => {},
-                            RtcIceConnectionState::Disconnected => {
-                                self.link.send_message(Msg::RemoveState(State::ConnectedToRtcPeer))
-                            },
-                            RtcIceConnectionState::Closed => {
-                                self.link.send_message(Msg::RemoveState(State::ConnectedToRtcPeer))
-                            },
-                            _ => {}
-                        }
-
+                    match local.ice_connection_state() {
+                        RtcIceConnectionState::New => {}
+                        RtcIceConnectionState::Checking => {}
+                        RtcIceConnectionState::Connected => self
+                            .link
+                            .send_message(Msg::AddState(State::ConnectedToRtcPeer)),
+                        RtcIceConnectionState::Completed => self
+                            .link
+                            .send_message(Msg::AddState(State::ConnectedToRtcPeer)),
+                        RtcIceConnectionState::Failed => {}
+                        RtcIceConnectionState::Disconnected => self
+                            .link
+                            .send_message(Msg::RemoveState(State::ConnectedToRtcPeer)),
+                        RtcIceConnectionState::Closed => self
+                            .link
+                            .send_message(Msg::RemoveState(State::ConnectedToRtcPeer)),
+                        _ => {}
+                    }
 
                     self.link.send_message(Msg::LogEvent(format!("::RTC Connection Status::\nIce Connection State: {:#?}\nSignaling State: {:#?}\nIce Gathering State: {:#?}", local.ice_connection_state(), local.signaling_state(), local.ice_gathering_state())));
                     true
@@ -990,7 +991,6 @@ impl Component for Model {
                 }
             },
             Msg::SetClient(client) => {
-                
                 self.client_to_model(client, Some(self.link.clone()));
 
                 true
@@ -1022,7 +1022,8 @@ impl Component for Model {
                 match self.user_id {
                     Some(this_user) => {
                         let updated_client = clients.get(&Client::from_user_id(this_user)).expect("If a client that is connected to the server currently receives a list of clients online that doesn't include itself then there is a big problem :x").to_owned();
-                        self.link.send_message(Msg::UpdateClientFromServer(updated_client));
+                        self.link
+                            .send_message(Msg::UpdateClientFromServer(updated_client));
                         clients.remove(&Client::from_user_id(this_user));
                     }
                     None => {
@@ -1242,7 +1243,7 @@ impl Component for Model {
             // <h1> "Remote Video" </h1>
             <video  width="320" height="240" autoplay=true controls=true ref=self.remote_video.clone()> </video>
 
-                
+
 
                     <button onclick=self.link.callback(|_| {Msg::DecreaseLogSize})> {"Decrease Log Size"} </button>
                     <button onclick=self.link.callback(|_| {Msg::IncreaseLogSize})> {"Increase Log Size"} </button>
@@ -1274,7 +1275,7 @@ impl Component for Model {
 
                 </div>
 
-                
+
 
                 {
                     if (!self.states.contains(&State::ConnectedToWebsocketServer)){

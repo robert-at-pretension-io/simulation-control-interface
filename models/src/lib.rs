@@ -2,9 +2,9 @@ use bincode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use chrono;
 use std::collections::HashSet;
 use std::net::SocketAddr;
-use chrono;
 
 #[derive(Debug, Serialize, Deserialize, Eq, Hash, Clone)]
 pub struct Client {
@@ -53,7 +53,7 @@ impl PartialEq for Client {
 }
 
 impl Client {
-    pub fn update(&mut self, client : Client) {
+    pub fn update(&mut self, client: Client) {
         self.username = client.username;
         self.ping_status = client.ping_status;
         self.status = client.status;
