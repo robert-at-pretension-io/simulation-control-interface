@@ -187,8 +187,8 @@ pub enum Command {
     ServerInitiated(Client),
     /// This will show the client the available users on any particular round
     OnlineClients(HashSet<Client>, RoundNumber),
-    /// This is sent from the server to the client in order to uniquely identify the client... Will need to store this in a database
-    ClientInfo(Client),
+    /// Used to uniquely identify the client
+    // InitiazeClient(Client),
     /// The string contains the content of the sdp message
     SdpRequest(String),
     /// The receiver in the message direction is the client that initially sent the SDP Request

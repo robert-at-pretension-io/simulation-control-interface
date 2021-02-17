@@ -163,18 +163,18 @@ async fn establish_and_maintain_each_client_ws_connection(
         }
     }
 
-    let envelope = Envelope::new(
-        EntityDetails::Server,
-        EntityDetails::Client(this_client.user_id.clone()),
-        None,
-        Command::ServerInitiated(this_client.clone()),
-    );
+    // let envelope = Envelope::new(
+    //     EntityDetails::Server,
+    //     EntityDetails::Client(this_client.user_id.clone()),
+    //     None,
+    //     Command::ServerInitiated(this_client.clone()),
+    // );
 
-    send_message(
-        &mut ws_stream,
-        tokio_tungstenite::tungstenite::Message::binary(envelope.serialize()),
-    )
-    .await;
+    // send_message(
+    //     &mut ws_stream,
+    //     tokio_tungstenite::tungstenite::Message::binary(envelope.serialize()),
+    // )
+    // .await;
 
     loop {
         tokio::select! {
@@ -566,73 +566,96 @@ async fn server_global_state_manager(
                                     info!("Received SdpRequest message with sdp: {:?}",sdp);
                                 }
                                 Command::ServerInitiated(client) => {
-
-                                    if let Some( client_connection) = client_controller_channel {
-
-                                    let envelope = Envelope::new(
-                                        EntityDetails::Server,
-                                        EntityDetails::Client(client.user_id.clone()),
-                                        None,
-                                        Command::ClientInfo(client.clone())
-                                    );
-
-                                    match client_connection.send(envelope).await
-                                    {
-                                        Ok(_) => {},
-                                        Err(err) => {info!("Received the following error: {:?}", err)}
-
-                                    }
                                     let client_id = client.user_id;
 
                                     let mut online_connections = online_connections.lock().await;
 
 
-                                    online_connections.insert(client_id, (client, client_connection));
+                                    
 
-                                    let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+                                    if let Some( client_connection) = client_controller_channel {
 
-                                    let clients = clients.clone();
 
-                                    let keys : HashSet<uuid::Uuid> =  online_connections.keys().cloned().collect();
+                                        match online_connections.insert(client_id, (client.clone(), client_connection.clone())) {
+    Some(_) => {}
+    None => {
+        let envelope = Envelope::new(
+            EntityDetails::Server,
+            EntityDetails::Client(client.user_id.clone()),
+            None,
+            Command::ServerInitiated(client.clone())
+        );
 
-                                    for uuid in keys  {
-                                        let clients = clients.clone();
-                                        send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
-                                    }
+        match client_connection.send(envelope).await
+        {
+            Ok(_) => {
+                info!("Initialized the client");
+                let update = Envelope::new(
+                    EntityDetails::Server,
+                    EntityDetails::Server,
+                    None,
+                    Command::BroadcastUpdate
+                );
+
+
+                global_state_update_sender.send((update,None)).await.unwrap();
+
+            },
+            Err(err) => {info!("Received the following error: {:?}", err)}
+
+        }
+    }
+}
+
+                               
+
+                                    
+
+                                    // let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+
+                                    // let clients = clients.clone();
+
+                                    // let keys : HashSet<uuid::Uuid> =  online_connections.keys().cloned().collect();
+
+                                    // for uuid in keys  {
+                                    //     let clients = clients.clone();
+                                    //     send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
+                                    // }
+
                                     }
 
                                 }
-                                Command::ClientInfo(client) => {
-                                    let mut online_connections = online_connections.lock().await;
+                                // Command::ClientInfo(client) => {
+                                //     let mut online_connections = online_connections.lock().await;
 
-                                            info!("received the following updated client info: {:?}", client);
-                                            match online_connections.get_mut(&client.user_id) {
-                                                Some((old_client, _client_connection)) => {
-                                                    match old_client.replace_with_newer_values(client)
-                                                    {
-                                                        Ok(_) => {},
-                                                        Err(err) => {info!("Couldn't replace the old_client: {:?}", err)}
+                                //             info!("received the following updated client info: {:?}", client);
+                                //             match online_connections.get_mut(&client.user_id) {
+                                //                 Some((old_client, _client_connection)) => {
+                                //                     match old_client.replace_with_newer_values(client)
+                                //                     {
+                                //                         Ok(_) => {},
+                                //                         Err(err) => {info!("Couldn't replace the old_client: {:?}", err)}
 
-                                                    }
-                                                },
-                                                None => {
-                                                    // nooo
-                                                }
-                                            }
+                                //                     }
+                                //                 },
+                                //                 None => {
+                                //                     // nooo
+                                //                 }
+                                //             }
 
-                                            let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+                                //             let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
-                                            let clients = clients.clone();
+                                //             let clients = clients.clone();
 
-                                            let keys : HashSet<uuid::Uuid>= online_connections.keys().cloned().collect();
+                                //             let keys : HashSet<uuid::Uuid>= online_connections.keys().cloned().collect();
 
 
-                                    for uuid in keys {
-                                        let clients = clients.clone();
+                                //     for uuid in keys {
+                                //         let clients = clients.clone();
 
-                                        send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
-                                    }
-                                    }
+                                //         send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
+                                //     }
+                                //     }
                                     // ? Needs to be more specific what this should do on the server... maybe this problem will be taken care of when the Envelope are segmented based on where the message should be interpretted
 
                                 Command::OnlineClients(_clients, _round_number) => {

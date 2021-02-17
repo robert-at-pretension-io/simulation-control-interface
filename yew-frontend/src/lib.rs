@@ -84,7 +84,6 @@ enum Msg {
     StatusChanged(Option<models::Status>, Option<models::Status>),
     UpdateClientFromServer(Client),
     GetUserMediaPermission,
-    UpdateUsername(String),
     SetClient(Client),
     ClearLog,
     ResetPage,
@@ -92,6 +91,7 @@ enum Msg {
     IncreaseLogSize,
     DecreaseLogSize,
     MaxLogSize,
+MinLogSize,
     SetLocalMediaStream,
 
     SetupWebRtc(),
@@ -151,41 +151,6 @@ impl Model {
         self.user_id = Some(client.user_id);
         self.ping_status = client.ping_status;
         self.status = client.status;
-    }
-
-    fn show_welcome_message(&self) -> Html {
-        {
-            if self.username.is_none() {
-                {
-                    if self.states.contains(&State::ConnectedToWebsocketServer) {
-                        html!(
-                            <>
-
-                            <button onclick=self.link.callback( |_| { Msg::UpdateUsername(format!("Alice"))
-
-                        }   )> {"Set username Alice"} </button>
-
-                        <button onclick=self.link.callback( |_| { Msg::UpdateUsername(format!("Bob"))
-
-                        }   )> {"Set username Bob"} </button>
-                            </>
-
-                            )
-                    } else {
-                        html!(<></>)
-                    }
-                }
-            } else {
-                //Username IS set!
-                html!(
-                    <div>
-
-                    {format!("Welcome {}", self.username.as_ref().unwrap())}
-
-                    </div>
-                )
-            }
-        }
     }
 
     fn send_ws_message(&mut self, data: Envelope) {
@@ -294,9 +259,9 @@ impl Model {
                                 )));
                                 cloned.send_message(Msg::UpdateOnlineUsers(clients))
                             }
-                            Command::ClientInfo(client) => {
-                                cloned.send_message(Msg::SetClient(client));
-                            }
+                            // Command::InitiazeClient(client) => {
+                            //     cloned.send_message(Msg::SetClient(client));
+                            // }
 
                             // Command::ReadyForPartner(_) => {
                             //     cloned.send_message(Msg::ServerSentWsMessage(format!(
@@ -726,6 +691,7 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+
             Msg::StatusChanged(old, new) => {
                 match new {
                     Some(status) => {
@@ -764,6 +730,10 @@ impl Component for Model {
             Msg::MaxLogSize => {
                 self.event_log_length = self.event_log.len();
 
+                true
+            }
+            Msg::MinLogSize => {
+                self.event_log_length = 5;
                 true
             }
             Msg::CloseWebRtcConnection => {
@@ -1025,27 +995,27 @@ impl Component for Model {
 
                 true
             }
-            Msg::UpdateUsername(username) => {
-                self.username = Some(username.clone());
-                let user_id = self.user_id.clone().expect("error unwrapping the user id");
+            // Msg::UpdateUsername(username) => {
+            //     self.username = Some(username.clone());
+            //     let user_id = self.user_id.clone().expect("error unwrapping the user id");
 
-                let envelope = Envelope::new(
-                    EntityDetails::Client(user_id.clone()),
-                    EntityDetails::Server,
-                    None,
-                    Command::ClientInfo(Client {
-                        email: None,
-                        user_id: user_id.clone(),
-                        username: Some(username),
-                        current_socket_addr: None,
-                        status: Some(Status::WaitingForPartner),
-                        ping_status: PingStatus::NeverPinged,
-                    }),
-                );
+            //     let envelope = Envelope::new(
+            //         EntityDetails::Client(user_id.clone()),
+            //         EntityDetails::Server,
+            //         None,
+            //         Command::ClientInfo(Client {
+            //             email: None,
+            //             user_id: user_id.clone(),
+            //             username: Some(username),
+            //             current_socket_addr: None,
+            //             status: Some(Status::WaitingForPartner),
+            //             ping_status: PingStatus::NeverPinged,
+            //         }),
+            //     );
 
-                self.send_ws_message(envelope);
-                true
-            }
+            //     self.send_ws_message(envelope);
+            //     true
+            // }
             Msg::UpdateOnlineUsers(clients) => {
                 let mut clients = clients.clone();
 
@@ -1272,13 +1242,12 @@ impl Component for Model {
             // <h1> "Remote Video" </h1>
             <video  width="320" height="240" autoplay=true controls=true ref=self.remote_video.clone()> </video>
 
-                {
-
-                    self.show_welcome_message()}
+                
 
                     <button onclick=self.link.callback(|_| {Msg::DecreaseLogSize})> {"Decrease Log Size"} </button>
                     <button onclick=self.link.callback(|_| {Msg::IncreaseLogSize})> {"Increase Log Size"} </button>
                     <button onclick=self.link.callback(|_| {Msg::MaxLogSize})> {"Show all Log"} </button>
+                    <button onclick=self.link.callback(|_| {Msg::MinLogSize})> {"Show minimum Log"} </button>
 
                 {if (self.event_log.len() > 5 ){ html!(<button onclick=self.link.callback(|_| {Msg::ClearLog})> {"Clear the event log."} </button> )} else {html!(<></>)}  }
                 <div>
