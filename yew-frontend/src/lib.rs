@@ -688,7 +688,7 @@ impl Component for Model {
         match msg {
             Msg::RequestClientBroadcast => {
                 let request = Envelope::new(
-                    EntityDetails::Client(self.user_id),
+                    EntityDetails::Client(self.user_id.unwrap()),
                     EntityDetails::Server,
                     None,
                     Command::BroadcastUpdate,
