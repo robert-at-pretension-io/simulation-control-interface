@@ -214,7 +214,7 @@ impl Model {
             }
         }
 
-        html!(<li> <button disabled=disable_button onclick=self.link.callback( move |_| {
+        html!(<li> <button disabled=disable_button, onclick=self.link.callback( move |_| {
                     Msg::MakeSdpRequestToClient(client_clone.user_id.clone())
                 } ) > {format!("{:#?} : {:#?}", client_clone2.username.clone() , client_clone2.current_socket_addr.clone())} </button> </li>)
     }
