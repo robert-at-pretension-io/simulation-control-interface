@@ -476,24 +476,25 @@ async fn server_global_state_manager(
                                                             match online_connections.get_mut(&person_b) {
                                                                 Some((client,_)) => {
                                                                     client.status = Some(models::Status::WaitingForPartner);
+                                                                    let update = Envelope::new(
+                                                                        EntityDetails::Server,
+                                                                        EntityDetails::Server,
+                                                                        None,
+                                                                        Command::BroadcastUpdate
+                                                                    );
+        
+        
+                                                                    match global_state_update_sender.send((update,None)).await {
+            Ok(_) => {info!("broadcasting the client is in fact ending the call!")}
+            Err(_) => {}
+        }
                                                                 }
                                                                 None => {
                                                                     panic!();
                                                                 }
                                                             };
 
-                                                            let update = Envelope::new(
-                                                                EntityDetails::Server,
-                                                                EntityDetails::Server,
-                                                                None,
-                                                                Command::BroadcastUpdate
-                                                            );
-
-
-                                                            match global_state_update_sender.send((update,None)).await {
-    Ok(_) => {info!("broadcasting the client is in fact ending the call!")}
-    Err(_) => {}
-}
+                                                            
 
                                                                                            }
                                                         Command::InCall(initiator, receiver) => {

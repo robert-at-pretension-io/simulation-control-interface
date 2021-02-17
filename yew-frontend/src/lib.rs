@@ -976,27 +976,7 @@ impl Component for Model {
 
                 true
             }
-            // Msg::UpdateUsername(username) => {
-            //     self.username = Some(username.clone());
-            //     let user_id = self.user_id.clone().expect("error unwrapping the user id");
 
-            //     let envelope = Envelope::new(
-            //         EntityDetails::Client(user_id.clone()),
-            //         EntityDetails::Server,
-            //         None,
-            //         Command::ClientInfo(Client {
-            //             email: None,
-            //             user_id: user_id.clone(),
-            //             username: Some(username),
-            //             current_socket_addr: None,
-            //             status: Some(Status::WaitingForPartner),
-            //             ping_status: PingStatus::NeverPinged,
-            //         }),
-            //     );
-
-            //     self.send_ws_message(envelope);
-            //     true
-            // }
             Msg::UpdateOnlineUsers(clients) => {
                 let mut clients = clients.clone();
 
