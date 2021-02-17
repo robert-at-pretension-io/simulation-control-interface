@@ -4,6 +4,7 @@ use uuid::Uuid;
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
+use chrono;
 
 #[derive(Debug, Serialize, Deserialize, Eq, Hash, Clone)]
 pub struct Client {
@@ -52,6 +53,14 @@ impl PartialEq for Client {
 }
 
 impl Client {
+    pub fn update(&mut self, client : Client) {
+        self.username = client.username;
+        self.ping_status = client.ping_status;
+        self.status = client.status;
+        self.user_id = client.user_id;
+        self.current_socket_addr = client.current_socket_addr;
+        self.email = client.email;
+    }
     /// This function is mainly used for comparison...
     pub fn from_user_id(user_id: uuid::Uuid) -> Client {
         Client {
@@ -162,6 +171,12 @@ type RoundNumber = u64;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Command {
+    /// This will send out the most up-to-date state of the online clients
+    BroadcastUpdate,
+    /// The first uuid is the initiator of the call, the second uuid is the receiver
+    InCall(Uuid, Uuid),
+    ///This will inform all clients of the current state of the system... In the future this will not need to be sent to all clients, instead it can be sent to a strongly-connected client which then propagates the updates to all other clients
+    UpdateClient(Client),
     /// For the time being, the error will be a string. In the future, it will be a struct/enum containing all possible errors that could occur
     Error(String),
     /// This indicates that this client is ready to be paired at whatever future round, the server will respond with a Self::OnlineClients variant

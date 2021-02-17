@@ -439,14 +439,69 @@ async fn server_global_state_manager(
 
 
                                     match control_message.command {
-                                        Command::Ping(client, round) => {
+                                        Command::BroadcastUpdate => {
+                                            let mut online_connections = online_connections.lock().await;
+
+                                            let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+
+                                            let clients = clients.clone();
+        
+                                            let keys : HashSet<uuid::Uuid> =  online_connections.keys().cloned().collect();
+        
+                                            for uuid in keys  {
+                                                let clients = clients.clone();
+                                                send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
+                                            }
+                                            
+                                        }
+                                        Command::InCall(initiator, receiver) => {
+                                            let mut online_connections = online_connections.lock().await;
+                                            match online_connections.get_mut(&initiator) {
+                                                Some((client,_)) => {
+                                                    client.status = Some(models::Status::InCall(initiator, receiver));
+                                                }
+                                                None => {
+                                                    panic!();
+                                                }
+                                            };
+                                            match online_connections.get_mut(&receiver) {
+                                                Some((client,_)) => {
+                                                    client.status = Some(models::Status::InCall(initiator, receiver));
+                                                }
+                                                None => {
+                                                    panic!();
+                                                }
+                                            };
+                                        }
+                                        Command::UpdateClient(client) => {
+                                            let mut online_connections = online_connections.lock().await;
+                                            match online_connections.get_mut(&client.user_id) {
+                                                Some((online_client,_)) => {
+                                                    online_client.update(client);
+
+                                                    let update = Envelope::new(
+                                                        EntityDetails::Server,
+                                                        EntityDetails::Server,
+                                                        None,
+                                                        Command::BroadcastUpdate
+                                                    );
+
+
+                                                    global_state_update_sender.send((update,None)).await.unwrap();
+                                                }
+                                                None => {
+                                                    panic!();
+                                                }
+                                            };
+                                        }
+                                        Command::Ping(_client, _round) => {
                                             info!("The server should not be implementing the ping...");
 
                                         }
                                         Command::Pong(client, round) => {
                                             let mut online_connections = online_connections.lock().await;
                                             match online_connections.get_mut(&client){
-            Some((client, client_sender)) => {
+            Some((client, _client_sender)) => {
                 client.ping_status = PingStatus::Ponged(round);
 
             }
@@ -551,6 +606,23 @@ async fn server_global_state_manager(
 
                                     let mut online_connections = online_connections.lock().await;
 
+                                        match online_connections.get_mut(&client.user_id){
+                                            Some(( online_client, _fine)) => {
+                                                online_client.status = Some(models::Status::WaitingForPartner);
+                                            }
+                                            None => {
+                                                let connection_closed = Envelope::new(
+                                                    EntityDetails::Server,
+                                                    EntityDetails::Server,
+                                                    None,
+                                                    Command::ClosedConnection(client.user_id)
+                                                );
+
+                                                global_state_update_sender.send((connection_closed, None)).await.expect("This should absolutely not fail... ^_^ I'm so sorry I failed you future self.");
+                                            }
+                                            
+                                        }
+                                        
 
                                     let ( clients, _) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
@@ -619,7 +691,20 @@ async fn server_global_state_manager(
                                                     info!("Trying to re-route the message to the appropriate client.");
                                                     match client_channel.send(first_clone.clone()).await
                                                     {
-                                                        Ok(_) => info!("sent message!"),
+                                                        Ok(_) => {info!("sent message!");
+                                                        let second_clone = first_clone.clone();
+
+                                                        match second_clone.command {
+                                                            Command::SdpRequest(_sdp) => {
+                                                                let sender = first_clone.sender;
+                                                                let receiver = first_clone.receiver;
+
+                                                            }
+                                                            _ => {
+                                                                //every other command that doesn't need to be covered :]
+                                                            }
+                                                        }
+                                                    },
                                                         Err(err) => {
                                                             info!("Error: {:?}",  err);
                                                             info!("Need to remove the client from the list of online clients");

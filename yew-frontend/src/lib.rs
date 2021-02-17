@@ -206,7 +206,15 @@ impl Model {
         let client_clone = client.clone();
         let client_clone2 = client.clone();
 
-        html!(<li> <button onclick=self.link.callback( move |_| {
+        let mut disable_button : bool = true;
+
+        if client.status.is_some() {
+            if client.status.clone().unwrap() == models::Status::WaitingForPartner {
+                disable_button = false;
+            }
+        }
+
+        html!(<li> <button disabled=disable_button onclick=self.link.callback( move |_| {
                     Msg::MakeSdpRequestToClient(client_clone.user_id.clone())
                 } ) > {format!("{:#?} : {:#?}", client_clone2.username.clone() , client_clone2.current_socket_addr.clone())} </button> </li>)
     }
@@ -292,6 +300,15 @@ impl Model {
                             Command::ClosedConnection(_) => cloned.send_message(Msg::ResetPage),
                             Command::AckClosedConnection(_) => {
                                 cloned.send_message(Msg::EndWebsocketConnection)
+                            }
+                            Command::BroadcastUpdate => {
+                                cloned.send_message(Msg::LogEvent(format!("In the future this will be used for getting all clients synced through datachannel!")));
+                            }
+                            Command::InCall(_, _) => {
+                                cloned.send_message(Msg::LogEvent(format!("This is used for updating the server state. This will not be implemented on the client")));
+                            }
+                            Command::UpdateClient(_) => {
+                                cloned.send_message(Msg::LogEvent(format!("This is used for updating the server state. This will not be implemented on the client")));
                             }
                         }
                     }
@@ -714,6 +731,7 @@ impl Component for Model {
                 match self.local_web_rtc_connection.as_ref() {
                     Some(connection) => {
                         connection.close();
+                        self.link.send_message(Msg::ReportRtcDiagnostics());
                     }
                     None => {
                         self.link.send_message(Msg::LogEvent(format!(
@@ -723,7 +741,7 @@ impl Component for Model {
                 }
 
                 let val = self.remote_video.cast::<HtmlMediaElement>().unwrap();
-                let mut stream = self.remote_stream.clone().unwrap();
+                let stream = self.remote_stream.clone().unwrap();
                 for track in stream.clone().get_tracks().to_vec() {
                     let track = track.dyn_into::<MediaStreamTrack>().unwrap();
                     self.link.send_message(Msg::LogEvent(format!(
