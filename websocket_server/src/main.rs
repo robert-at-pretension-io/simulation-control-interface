@@ -455,8 +455,35 @@ async fn server_global_state_manager(
                                             
                                         }
                                         Command::EndCall(person_a, person_b) => {
-                                            
-                                        }
+                                            let mut online_connections = online_connections.lock().await;
+                                            match online_connections.get_mut(&person_a) {
+                                                Some((client,_)) => {
+                                                    client.status = Some(models::Status::WaitingForPartner);
+                                                }
+                                                None => {
+                                                    panic!();
+                                                }
+                                            };
+                                            match online_connections.get_mut(&person_b) {
+                                                Some((client,_)) => {
+                                                    client.status = Some(models::Status::WaitingForPartner);
+                                                }
+                                                None => {
+                                                    panic!();
+                                                }
+                                            };
+
+                                            let update = Envelope::new(
+                                                EntityDetails::Server,
+                                                EntityDetails::Server,
+                                                None,
+                                                Command::BroadcastUpdate
+                                            );
+
+
+                                            global_state_update_sender.send((update,None)).await.unwrap();
+
+                                                                           }                                       
                                         Command::InCall(initiator, receiver) => {
                                             let mut online_connections = online_connections.lock().await;
                                             match online_connections.get_mut(&initiator) {
@@ -475,6 +502,16 @@ async fn server_global_state_manager(
                                                     panic!();
                                                 }
                                             };
+
+                                            let update = Envelope::new(
+                                                EntityDetails::Server,
+                                                EntityDetails::Server,
+                                                None,
+                                                Command::BroadcastUpdate
+                                            );
+
+
+                                            global_state_update_sender.send((update,None)).await.unwrap();
                                         }
                                         Command::UpdateClient(client) => {
                                             let mut online_connections = online_connections.lock().await;
@@ -697,7 +734,19 @@ async fn server_global_state_manager(
                                                         Ok(_) => {info!("sent message!");
                                                         let second_clone = first_clone.clone();
 
+
                                                         match second_clone.command {
+                                                            Command::EndCall(person_a,person_b) => {
+                                                                
+                                                                let end_call = Envelope::new(
+                                                                    EntityDetails::Server,
+                                                                    EntityDetails::Server,
+                                                                    None,
+                                                                    Command::InCall(person_a, person_b)
+                                                                );
+
+                                                                global_state_update_sender.send((end_call, None)).await.expect("this should work :]]]] haha I'm going to have to deal with this one day. That day is going to suck... But at least it's not now.... uhhh.... sorry.");
+                                                            }
                                                             Command::SdpRequest(_sdp) => {
                                                                 let sender = first_clone.sender;
                                                                 
