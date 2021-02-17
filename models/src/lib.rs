@@ -98,15 +98,15 @@ impl PartialEq for PingStatus {
                     }
                 }
                 PingStatus::NeverPinged => false,
-                PingStatus::Ponged(d) => false,
+                PingStatus::Ponged(_d) => false,
             },
             PingStatus::NeverPinged => match other {
-                PingStatus::Pinged(c) => false,
+                PingStatus::Pinged(_c) => false,
                 PingStatus::NeverPinged => true,
-                PingStatus::Ponged(d) => false,
+                PingStatus::Ponged(_d) => false,
             },
             PingStatus::Ponged(a) => match other {
-                PingStatus::Pinged(c) => false,
+                PingStatus::Pinged(_c) => false,
                 PingStatus::NeverPinged => false,
                 PingStatus::Ponged(d) => {
                     if a == d {

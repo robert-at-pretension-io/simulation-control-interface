@@ -104,7 +104,16 @@ async fn send_message(
         }
         tokio_tungstenite::tungstenite::Message::Pong(txt) => {
             info!("Sending pong message");
-            //
+            match stream
+                .send(tokio_tungstenite::tungstenite::Message::Pong(txt.clone()))
+                .await
+            {
+                Ok(_) => info!("sent message!"),
+                Err(err) => info!(
+                    "Have error trying to send this message: {:?} \n... error: {:?}",
+                    txt, err
+                ),
+            }
         }
     }
 }
@@ -324,7 +333,7 @@ async fn server_global_state_manager(
 ) {
     // the global_state_update_sender is the mechanism by which the sever gives itself commands
 
-    let mut online_connections =
+    let online_connections =
         Mutex::new(HashMap::<uuid::Uuid, (Client, mpsc::Sender<Envelope>)>::new());
 
     let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<u64>(10);
@@ -412,15 +421,6 @@ async fn server_global_state_manager(
                                                 None => {}
         }
                                         }
-
-                                        // let clients = clients.clone();
-
-                                        // let keys : HashSet<uuid::Uuid> =  online_connections.keys().cloned().collect();
-
-                                        // for uuid in keys  {
-                                        //     let clients = clients.clone();
-                                        //     send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
-                                        // }
 
 
                                     }

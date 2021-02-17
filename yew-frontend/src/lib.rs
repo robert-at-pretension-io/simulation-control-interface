@@ -13,28 +13,27 @@ use yew::ComponentLink;
 // This local trait is for shared objects between the frontend and the backend
 use models::{Client, Command, EntityDetails, Envelope, PingStatus, Status};
 
-use core::borrow;
-use std::{clone, net::SocketAddr};
+use std::{ net::SocketAddr};
 
 use std::collections::HashSet;
 
 // all of these are for webrtc
 use js_sys::{Array, Reflect};
-use wasm_bindgen::prelude::*;
+
 use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::{
-    Element, HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack,
-    MediaTrackSupportedConstraints, MessageEvent, Navigator, RtcConfiguration, RtcIceCandidate,
-    RtcIceCandidateInit, RtcIceConnectionState, RtcIceGatheringState, RtcIceServer,
-    RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver, RtcRtpSender,
+     HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack,
+     MessageEvent,  RtcConfiguration, RtcIceCandidate,
+    RtcIceCandidateInit, 
+    RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver, 
     RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit,
-    RtcSignalingState, RtcTrackEvent, WebSocket, Window,
+     RtcTrackEvent, WebSocket, 
 };
 
 use console_error_panic_hook;
 use std::panic;
 
-use regex::Regex;
+
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 enum State {
@@ -443,11 +442,14 @@ fn return_ice_callback(
     Closure::wrap(
         Box::new(move |ev: RtcPeerConnectionIceEvent| match ev.candidate() {
             Some(candidate) => {
+                if candidate.candidate().len() > 0
+{
                 cloned_link.send_message(Msg::LogEvent(format!(
                     "This client made an ice candidate: {:#?}",
                     candidate.candidate()
                 )));
-                cloned_link.send_message(Msg::AddLocalIceCandidate(candidate.candidate()))
+                cloned_link.send_message(Msg::AddLocalIceCandidate(candidate.candidate()));}
+
             }
             None => {
                 cloned_link.send_message(Msg::LogEvent(format!("Done getting ice candidates")));
