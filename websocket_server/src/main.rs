@@ -338,7 +338,7 @@ async fn server_global_state_manager(
 
     let (status_processer_notifier_tx, mut status_processer_notifier_rx) = mpsc::channel::<u64>(10);
 
-    tokio::spawn(async move { game_loop(status_processer_notifier_tx, 10).await });
+    tokio::spawn(async move { game_loop(status_processer_notifier_tx, 20).await });
 
     let current_round = 0;
 
