@@ -1000,7 +1000,10 @@ impl Component for Model {
             Msg::UpdateOnlineUsers(clients) => {
                 let mut clients = clients.clone();
 
-self.link.send_message(Msg::LogEvent(format!("Received the following clientlist from the server: {:#?}", clients.clone())));
+                self.link.send_message(Msg::LogEvent(format!(
+                    "Received the following clientlist from the server: {:#?}",
+                    clients.clone()
+                )));
 
                 match self.user_id {
                     Some(this_user) => {

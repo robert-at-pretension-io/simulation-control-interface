@@ -3,8 +3,12 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use chrono;
-use std::{collections::{HashMap, HashSet}, hash::Hash, hash::Hasher};
 use std::net::SocketAddr;
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+    hash::Hasher,
+};
 
 #[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
 pub struct Client {
@@ -45,8 +49,6 @@ pub enum Status {
 //         }
 //     }
 // }
-
-
 
 impl Client {
     pub fn update(&mut self, client: Client) {
@@ -182,7 +184,7 @@ pub enum Command {
     ///  When the server is initiated, the server sends this to the client and the client responds in turn (of course, changing the MessageDirection).
     ServerInitiated(Client),
     /// This will show the client the available users on any particular round
-    OnlineClients(HashMap<Uuid,Client>, RoundNumber),
+    OnlineClients(HashMap<Uuid, Client>, RoundNumber),
     /// Used to uniquely identify the client
     // InitiazeClient(Client),
     /// The string contains the content of the sdp message
