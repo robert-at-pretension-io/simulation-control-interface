@@ -256,15 +256,6 @@ impl Model {
                                 )));
                                 cloned.send_message(Msg::UpdateOnlineUsers(clients))
                             }
-                            // Command::InitiazeClient(client) => {
-                            //     cloned.send_message(Msg::SetClient(client));
-                            // }
-
-                            // Command::ReadyForPartner(_) => {
-                            //     cloned.send_message(Msg::ServerSentWsMessage(format!(
-                            //         "Ready for partner acknowledged by server"
-                            //     )));
-                            // }
                             Command::SdpRequest(request) => {
                                 cloned.send_message(Msg::MakeSdpResponse(
                                     request,
@@ -902,17 +893,7 @@ impl Component for Model {
 
                 true
             }
-            // Msg::RequestUsersOnline(client) => {
-            //     let envelope = Envelope::new(
-            //         EntityDetails::Client(client.user_id.clone()),
-            //         EntityDetails::Server,
-            //         None,
-            //         Command::ReadyForPartner(client.clone()),
-            //     );
-            //     self.send_ws_message(envelope);
 
-            //     true
-            // }
             Msg::SendWsMessage(control_message) => {
                 self.link.send_message(Msg::LogEvent(format!(
                     "Sending Message to server: {:#?}",
@@ -1018,6 +999,8 @@ impl Component for Model {
             // }
             Msg::UpdateOnlineUsers(clients) => {
                 let mut clients = clients.clone();
+
+self.link.send_message(Msg::LogEvent(format!("Received the following clientlist from the server: {:#?}", clients.clone())));
 
                 match self.user_id {
                     Some(this_user) => {

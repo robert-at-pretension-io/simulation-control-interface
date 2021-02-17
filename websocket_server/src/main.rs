@@ -603,52 +603,10 @@ async fn server_global_state_manager(
 
 
 
-                                            // let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
-
-                                            // let clients = clients.clone();
-
-                                            // let keys : HashSet<uuid::Uuid> =  online_connections.keys().cloned().collect();
-
-                                            // for uuid in keys  {
-                                            //     let clients = clients.clone();
-                                            //     send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
-                                            // }
 
                                             }
 
                                         }
-                                        // Command::ClientInfo(client) => {
-                                        //     let mut online_connections = online_connections.lock().await;
-
-                                        //             info!("received the following updated client info: {:?}", client);
-                                        //             match online_connections.get_mut(&client.user_id) {
-                                        //                 Some((old_client, _client_connection)) => {
-                                        //                     match old_client.replace_with_newer_values(client)
-                                        //                     {
-                                        //                         Ok(_) => {},
-                                        //                         Err(err) => {info!("Couldn't replace the old_client: {:?}", err)}
-
-                                        //                     }
-                                        //                 },
-                                        //                 None => {
-                                        //                     // nooo
-                                        //                 }
-                                        //             }
-
-                                        //             let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
-
-                                        //             let clients = clients.clone();
-
-                                        //             let keys : HashSet<uuid::Uuid>= online_connections.keys().cloned().collect();
-
-
-                                        //     for uuid in keys {
-                                        //         let clients = clients.clone();
-
-                                        //         send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
-                                        //     }
-                                        //     }
-                                            // ? Needs to be more specific what this should do on the server... maybe this problem will be taken care of when the Envelope are segmented based on where the message should be interpretted
 
                                         Command::OnlineClients(_clients, _round_number) => {
                                             // oof just not useful.
@@ -656,35 +614,7 @@ async fn server_global_state_manager(
                                         Command::AckClosedConnection(_) => {
                                             // This is only useful on the clientside
                                         }
-                        //                 Command::ReadyForPartner(client) => {
-                        //                     info!("{:?} would like to get partner please", client.user_id);
 
-                        //                     let mut online_connections = online_connections.lock().await;
-
-                        //                         match online_connections.get_mut(&client.user_id){
-                        //                             Some(( online_client, _fine)) => {
-                        //                                 online_client.status = Some(models::Status::WaitingForPartner);
-                        //                             }
-                        //                             None => {
-                        //                                 let connection_closed = Envelope::new(
-                        //                                     EntityDetails::Server,
-                        //                                     EntityDetails::Server,
-                        //                                     None,
-                        //                                     Command::ClosedConnection(client.user_id)
-                        //                                 );
-
-                        //                                 global_state_update_sender.send((connection_closed, None)).await.expect("This should absolutely not fail... ^_^ I'm so sorry I failed you future self.");
-                        //                             }
-
-                        //                         }
-
-
-                        //                     let ( clients, _) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
-
-
-                        // send_command_to_client_by_uuid(client.user_id, Command::OnlineClients(clients, current_round), &mut online_connections).await
-
-                        //                 }
                                         Command::ClosedConnection(client) => {
 
                                             let mut online_connections = online_connections.lock().await;
