@@ -3,10 +3,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use chrono;
-use std::collections::HashSet;
+use std::{collections::HashSet, hash::Hasher, hash::Hash};
 use std::net::SocketAddr;
 
-#[derive(Debug, Serialize, Deserialize, Eq, Hash, Clone)]
+#[derive(Debug, Serialize, Deserialize, Eq, Clone)]
 pub struct Client {
     pub username: Option<String>,
     pub email: Option<String>,
@@ -49,6 +49,12 @@ impl PartialEq for Status {
 impl PartialEq for Client {
     fn eq(&self, other: &Self) -> bool {
         self.user_id == other.user_id
+    }
+}
+
+impl Hash for Client {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.user_id.hash(state);
     }
 }
 
