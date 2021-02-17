@@ -13,7 +13,7 @@ use yew::ComponentLink;
 // This local trait is for shared objects between the frontend and the backend
 use models::{Client, Command, EntityDetails, Envelope, PingStatus, Status};
 
-use std::net::SocketAddr;
+use std::{collections::HashMap, net::SocketAddr};
 
 use std::collections::HashSet;
 
@@ -58,7 +58,7 @@ struct Model {
     partner: Option<Uuid>,
     link: ComponentLink<Self>,
     websocket: Option<WebSocket>,
-    peers: HashSet<Client>,
+    peers: HashMap<uuid::Uuid, Client>,
     states: HashSet<State>,
     local_ice_candidate: Vec<String>,
     local_web_rtc_connection: Option<RtcPeerConnection>,
@@ -72,7 +72,7 @@ impl Model {
         self.connection_socket_address = None;
         self.partner = None;
         self.websocket = None;
-        self.peers = HashSet::new();
+        self.peers = HashMap::new();
         self.states = HashSet::new();
     }
 }
@@ -115,7 +115,7 @@ enum Msg {
     InitiateWebsocketConnectionProcess,
 
     ServerSentWsMessage(String),
-    UpdateOnlineUsers(HashSet<Client>),
+    UpdateOnlineUsers(HashMap<uuid::Uuid, Client>),
     AddState(State),
     RemoveState(State),
     CloseWebsocketConnection,
@@ -668,7 +668,7 @@ impl Component for Model {
             user_id: None,
             username: None,
             partner: None,
-            peers: HashSet::<Client>::new(),
+            peers: HashMap::<uuid::Uuid, Client>::new(),
             states: HashSet::<State>::new(),
             status: None,
             ping_status: PingStatus::NeverPinged,
@@ -1004,10 +1004,10 @@ self.link.send_message(Msg::LogEvent(format!("Received the following clientlist 
 
                 match self.user_id {
                     Some(this_user) => {
-                        let updated_client = clients.get(&Client::from_user_id(this_user)).expect("If a client that is connected to the server currently receives a list of clients online that doesn't include itself then there is a big problem :x").to_owned();
+                        let updated_client = clients.get(&this_user).expect("If a client that is connected to the server currently receives a list of clients online that doesn't include itself then there is a big problem :x").to_owned();
                         self.link
                             .send_message(Msg::UpdateClientFromServer(updated_client));
-                        clients.remove(&Client::from_user_id(this_user));
+                        clients.remove(&this_user);
                     }
                     None => {
                         // how?!
@@ -1275,8 +1275,8 @@ self.link.send_message(Msg::LogEvent(format!("Received the following clientlist 
                             <div>
                             <h1> {"Peers online:"} </h1>
                             {
-                                for self.peers.iter().map(|client| {
-                                    if client != &Client::from_user_id(self.user_id.unwrap()){
+                                for self.peers.iter().map(|(uuid,client)| {
+                                    if uuid.to_owned() != self.user_id.unwrap(){
                                 self.show_peers_online(client)} else {html!(<></>)}
 
                             })

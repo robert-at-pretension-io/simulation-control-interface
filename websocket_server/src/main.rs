@@ -445,12 +445,21 @@ async fn server_global_state_manager(
                                                     let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
                                                     let clients = clients.clone();
+                                                    let clients_cloned = clients.clone();
+
+
 
                                                     let keys : HashSet<uuid::Uuid> =  online_connections.keys().cloned().collect();
 
+
+                                                    let keys_clone : HashSet<uuid::Uuid> = keys.clone().to_owned();
+
+
+                                                    let hashmap = keys_clone.into_iter().zip(clients_cloned).collect::<HashMap<uuid::Uuid, Client>>();
+
                                                     for uuid in keys  {
-                                                        let clients = clients.clone();
-                                                        send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
+                                                        let hashmap = hashmap.clone();
+                                                        send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(hashmap, current_round), &mut online_connections).await
                                                     }
 
                                                 }
@@ -645,16 +654,16 @@ async fn server_global_state_manager(
                         }
                                             info!("After closing the connection the online_connections are: {:?}", online_connections.clone());
 
-                                            let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+                                            let update = Envelope::new(
+                                                EntityDetails::Server,
+                                                EntityDetails::Server,
+                                                None,
+                                                Command::BroadcastUpdate
+                                            );
 
-                                            let clients = clients.clone();
 
-                                            let keys : HashSet<uuid::Uuid>= online_connections.keys().cloned().collect();
-                                            for uuid in keys {
+                                            global_state_update_sender.send((update,None)).await.unwrap();
 
-                                            let clients = clients.clone();
-                                                send_command_to_client_by_uuid(uuid.clone(), Command::OnlineClients(clients, current_round), &mut online_connections).await
-                                            }
                                             }
 
                                         }

@@ -3,10 +3,10 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use chrono;
-use std::{collections::HashSet, hash::Hasher, hash::Hash};
+use std::{collections::{HashMap, HashSet}, hash::Hash, hash::Hasher};
 use std::net::SocketAddr;
 
-#[derive(Debug, Serialize, Deserialize, Eq, Clone)]
+#[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
 pub struct Client {
     pub username: Option<String>,
     pub email: Option<String>,
@@ -17,46 +17,36 @@ pub struct Client {
     pub ping_status: PingStatus,
 }
 
-#[derive(Debug, Serialize, Deserialize, Eq, Hash, Clone)]
+#[derive(Debug, Serialize, Deserialize, Hash, Clone, Eq, PartialEq)]
 pub enum Status {
     InCall(Uuid, Uuid),
     WaitingForPartner,
     AnsweringQuestionAboutLastPartner,
 }
 
-impl PartialEq for Status {
-    fn eq(&self, other: &Self) -> bool {
-        match self {
-            Status::InCall(_a, _b) => match other {
-                Status::InCall(_c, _d) => true,
-                Status::WaitingForPartner => false,
-                Status::AnsweringQuestionAboutLastPartner => false,
-            },
-            Status::WaitingForPartner => match other {
-                Status::InCall(_c, _d) => false,
-                Status::WaitingForPartner => true,
-                Status::AnsweringQuestionAboutLastPartner => false,
-            },
-            Status::AnsweringQuestionAboutLastPartner => match other {
-                Status::InCall(_c, _d) => false,
-                Status::WaitingForPartner => false,
-                Status::AnsweringQuestionAboutLastPartner => true,
-            },
-        }
-    }
-}
+// impl PartialEq for Status {
+//     fn eq(&self, other: &Self) -> bool {
+//         match self {
+//             Status::InCall(_a, _b) => match other {
+//                 Status::InCall(_c, _d) => true,
+//                 Status::WaitingForPartner => false,
+//                 Status::AnsweringQuestionAboutLastPartner => false,
+//             },
+//             Status::WaitingForPartner => match other {
+//                 Status::InCall(_c, _d) => false,
+//                 Status::WaitingForPartner => true,
+//                 Status::AnsweringQuestionAboutLastPartner => false,
+//             },
+//             Status::AnsweringQuestionAboutLastPartner => match other {
+//                 Status::InCall(_c, _d) => false,
+//                 Status::WaitingForPartner => false,
+//                 Status::AnsweringQuestionAboutLastPartner => true,
+//             },
+//         }
+//     }
+// }
 
-impl PartialEq for Client {
-    fn eq(&self, other: &Self) -> bool {
-        self.user_id == other.user_id
-    }
-}
 
-impl Hash for Client {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.user_id.hash(state);
-    }
-}
 
 impl Client {
     pub fn update(&mut self, client: Client) {
@@ -192,7 +182,7 @@ pub enum Command {
     ///  When the server is initiated, the server sends this to the client and the client responds in turn (of course, changing the MessageDirection).
     ServerInitiated(Client),
     /// This will show the client the available users on any particular round
-    OnlineClients(HashSet<Client>, RoundNumber),
+    OnlineClients(HashMap<Uuid,Client>, RoundNumber),
     /// Used to uniquely identify the client
     // InitiazeClient(Client),
     /// The string contains the content of the sdp message
