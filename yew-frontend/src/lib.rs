@@ -1270,7 +1270,7 @@ self.link.send_message(Msg::LogEvent(format!("Received the following clientlist 
                     else {
                         html!(<div>
 
-                            {if self.peers.len() > 1 {
+                            {if self.peers.len() > 0 {
                                 html!(
                             <div>
                             <h1> {"Peers online:"} </h1>
