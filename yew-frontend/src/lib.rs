@@ -52,6 +52,7 @@ struct Model {
     remote_video: NodeRef,
     event_log: Vec<String>,
     event_log_length: usize,
+    server_model_of_client : Option<Client>,
     connection_socket_address: Option<SocketAddr>,
     user_id: Option<uuid::Uuid>,
     username: Option<String>,
@@ -80,6 +81,8 @@ impl Model {
 }
 #[derive(Debug, Clone)]
 enum Msg {
+    StatusChanged(Option<models::Status>, Option<models::Status>),
+    UpdateClientFromServer(Client),
     GetUserMediaPermission,
     UpdateUsername(String),
     SetClient(Client),
@@ -99,6 +102,7 @@ enum Msg {
     AddLocalIceCandidate(String),
     SetLocalWebRtcOffer(String),
     CloseWebRtcConnection,
+    ClosedWebRtcConnection,
 
     AddRemoteMediaStream(MediaStreamTrack),
 
@@ -126,7 +130,22 @@ enum Msg {
 extern crate web_sys;
 
 impl Model {
-    fn client_to_model(&mut self, client: Client) {
+    fn client_to_model(&mut self, client: Client, link : Option<ComponentLink<Model>>) {
+
+        let old_status = self.status.clone();
+        let new_status = client.status.clone();
+
+        if old_status != new_status {
+            match link{
+                Some(link) => {
+
+                },
+                None => {
+                    panic!();
+                }
+            }
+        }
+
         self.connection_socket_address = client.current_socket_addr;
         self.username = client.username;
         self.user_id = Some(client.user_id);
@@ -238,6 +257,9 @@ impl Model {
                         let sender = result.sender;
                         let receiver = result.receiver;
                         match result.command {
+                            Command::EndCall(_,_) => {
+                                cloned.send_message(Msg::LogEvent(format!("Really don't need to do anything here!")));
+                            }
                             Command::Error(error) => {
                                 cloned.send_message(Msg::LogEvent(format!(
                                     "Received the following error: {}",
@@ -679,6 +701,7 @@ impl Component for Model {
 
     fn create(_: Self::Properties, link: ComponentLink<Self>) -> Self {
         Model {
+            server_model_of_client: None,
             round_number: None,
             local_web_rtc_connection: None,
             link,
@@ -703,6 +726,23 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::StatusChanged(old, new) => {
+                match new {
+                    Some(status) => {
+                        match status {
+                            Status::InCall(_, _) => {}
+                            Status::WaitingForPartner => {
+                                self.link.send_message(Msg::ClosedWebRtcConnection);
+                            }
+                            Status::AnsweringQuestionAboutLastPartner => {}
+                        }
+                    }
+                    None => {
+                        self.link.send_message(Msg::ResetPage);
+                    }
+                }
+                true
+            }
             Msg::Ping(round_number) => {
                 let pong = Envelope::new(
                     EntityDetails::Client(self.user_id.unwrap()),
@@ -726,8 +766,24 @@ impl Component for Model {
 
                 true
             }
-
             Msg::CloseWebRtcConnection => {
+                let me = self.user_id.unwrap();
+                let peer = self.partner.unwrap();
+                let close_msg = Envelope::new(
+                    EntityDetails::Client(me.clone()),
+                    EntityDetails::Client(peer.clone()),
+                    Some(EntityDetails::Server),
+                        Command::EndCall(me,peer)
+                );
+
+
+
+                self.send_ws_message(close_msg);
+
+                true
+            }
+
+            Msg::ClosedWebRtcConnection => {
                 match self.local_web_rtc_connection.as_ref() {
                     Some(connection) => {
                         connection.close();
@@ -964,7 +1020,8 @@ impl Component for Model {
                 }
             },
             Msg::SetClient(client) => {
-                self.client_to_model(client);
+                
+                self.client_to_model(client, Some(self.link.clone()));
 
                 true
             }
@@ -994,6 +1051,8 @@ impl Component for Model {
 
                 match self.user_id {
                     Some(this_user) => {
+                        let updated_client = clients.get(&Client::from_user_id(this_user)).expect("If a client that is connected to the server currently receives a list of clients online that doesn't include itself then there is a big problem :x").to_owned();
+                        self.link.send_message(Msg::UpdateClientFromServer(updated_client));
                         clients.remove(&Client::from_user_id(this_user));
                     }
                     None => {
@@ -1002,6 +1061,11 @@ impl Component for Model {
                 }
                 self.peers = clients;
 
+                true
+            }
+            Msg::UpdateClientFromServer(client) => {
+                self.server_model_of_client = Some(client.clone());
+                self.link.send_message(Msg::SetClient(client));
                 true
             }
             Msg::ReceivedIceCandidate(ice_candidate) => {

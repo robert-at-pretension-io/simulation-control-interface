@@ -454,6 +454,9 @@ async fn server_global_state_manager(
                                             }
                                             
                                         }
+                                        Command::EndCall(person_a, person_b) => {
+                                            
+                                        }
                                         Command::InCall(initiator, receiver) => {
                                             let mut online_connections = online_connections.lock().await;
                                             match online_connections.get_mut(&initiator) {

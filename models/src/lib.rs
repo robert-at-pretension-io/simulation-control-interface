@@ -175,6 +175,8 @@ pub enum Command {
     BroadcastUpdate,
     /// The first uuid is the initiator of the call, the second uuid is the receiver
     InCall(Uuid, Uuid),
+    /// This command will be send from either client indicating to the system the desire for their call to be ended... The system will then mark them as available to chat with future partners
+    EndCall(Uuid, Uuid),
     ///This will inform all clients of the current state of the system... In the future this will not need to be sent to all clients, instead it can be sent to a strongly-connected client which then propagates the updates to all other clients
     UpdateClient(Client),
     /// For the time being, the error will be a string. In the future, it will be a struct/enum containing all possible errors that could occur
