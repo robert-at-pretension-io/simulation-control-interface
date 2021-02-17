@@ -122,7 +122,7 @@ enum Msg {
     RemoveState(State),
     CloseWebsocketConnection,
     EndWebsocketConnection,
-    RequestUsersOnline(Client),
+    // RequestUsersOnline(Client),
     SendWsMessage(Envelope),
     Ping(u64),
 }
@@ -284,7 +284,7 @@ impl Model {
                                     Msg::SetClient(client.clone()),
                                     Msg::AddState(State::ConnectedToWebsocketServer),
                                     Msg::SetupWebRtc(),
-                                    Msg::RequestUsersOnline(client),
+                                    // Msg::RequestUsersOnline(client),
                                 ];
                                 cloned.send_message_batch(messages);
                             }
@@ -298,11 +298,11 @@ impl Model {
                                 cloned.send_message(Msg::SetClient(client));
                             }
 
-                            Command::ReadyForPartner(_) => {
-                                cloned.send_message(Msg::ServerSentWsMessage(format!(
-                                    "Ready for partner acknowledged by server"
-                                )));
-                            }
+                            // Command::ReadyForPartner(_) => {
+                            //     cloned.send_message(Msg::ServerSentWsMessage(format!(
+                            //         "Ready for partner acknowledged by server"
+                            //     )));
+                            // }
 
                             Command::SdpRequest(request) => {
                                 cloned.send_message(Msg::MakeSdpResponse(
@@ -931,17 +931,17 @@ impl Component for Model {
 
                 true
             }
-            Msg::RequestUsersOnline(client) => {
-                let envelope = Envelope::new(
-                    EntityDetails::Client(client.user_id.clone()),
-                    EntityDetails::Server,
-                    None,
-                    Command::ReadyForPartner(client.clone()),
-                );
-                self.send_ws_message(envelope);
+            // Msg::RequestUsersOnline(client) => {
+            //     let envelope = Envelope::new(
+            //         EntityDetails::Client(client.user_id.clone()),
+            //         EntityDetails::Server,
+            //         None,
+            //         Command::ReadyForPartner(client.clone()),
+            //     );
+            //     self.send_ws_message(envelope);
 
-                true
-            }
+            //     true
+            // }
             Msg::SendWsMessage(control_message) => {
                 self.link.send_message(Msg::LogEvent(format!(
                     "Sending Message to server: {:#?}",

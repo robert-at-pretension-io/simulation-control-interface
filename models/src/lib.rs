@@ -181,9 +181,9 @@ pub enum Command {
     UpdateClient(Client),
     /// For the time being, the error will be a string. In the future, it will be a struct/enum containing all possible errors that could occur
     Error(String),
-    /// This indicates that this client is ready to be paired at whatever future round, the server will respond with a Self::OnlineClients variant
-    ReadyForPartner(Client),
-    /// When the server is initiated, the server sends this to the client and the client responds in turn (of course, changing the MessageDirection).
+    // This indicates that this client is ready to be paired at whatever future round, the server will respond with a Self::OnlineClients variant
+    // ReadyForPartner(Client),
+    ///  When the server is initiated, the server sends this to the client and the client responds in turn (of course, changing the MessageDirection).
     ServerInitiated(Client),
     /// This will show the client the available users on any particular round
     OnlineClients(HashSet<Client>, RoundNumber),
