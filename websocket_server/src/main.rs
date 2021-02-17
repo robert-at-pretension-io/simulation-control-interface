@@ -697,7 +697,18 @@ async fn server_global_state_manager(
                                                         match second_clone.command {
                                                             Command::SdpRequest(_sdp) => {
                                                                 let sender = first_clone.sender;
+                                                                
                                                                 let receiver = first_clone.receiver;
+
+                                                                let make_in_call = Envelope::new(
+                                                                    EntityDetails::Server,
+                                                                    EntityDetails::Server,
+                                                                    None,
+                                                                    Command::InCall(sender.get_uuid().unwrap(), receiver.get_uuid().unwrap())
+                                                                );
+
+                                                                global_state_update_sender.send((make_in_call, None)).await.expect("FUCK... FUCK FUCK FUCK DON'T BREAK PLZ");
+
 
                                                             }
                                                             _ => {
