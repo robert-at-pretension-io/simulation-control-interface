@@ -114,13 +114,11 @@ enum Msg {
 
     InitiateWebsocketConnectionProcess,
 
-    ServerSentWsMessage(String),
     UpdateOnlineUsers(HashMap<uuid::Uuid, Client>),
     AddState(State),
     RemoveState(State),
     CloseWebsocketConnection,
     EndWebsocketConnection,
-    // RequestUsersOnline(Client),
     SendWsMessage(Envelope),
     Ping(u64),
 }
@@ -134,7 +132,9 @@ impl Model {
 
         if old_status != new_status {
             match link {
-                Some(link) => {}
+                Some(link) => {
+                    link.send_message(Msg::StatusChanged(old_status, new_status))
+                }
                 None => {
                     panic!();
                 }
@@ -686,10 +686,12 @@ impl Component for Model {
                 true
             }
 
-            Msg::StatusChanged(old, new) => {
+            Msg::StatusChanged(_old, new) => {
                 match new {
                     Some(status) => match status {
-                        Status::InCall(_, _) => {}
+                        Status::InCall(_, _) => {
+                            self.link.send_message(Msg::AddState(State::ConnectedToRtcPeer));
+                        }
                         Status::WaitingForPartner => {
                             self.link.send_message(Msg::ClosedWebRtcConnection);
                         }
@@ -748,6 +750,7 @@ impl Component for Model {
                     Some(connection) => {
                         connection.close();
                         self.link.send_message(Msg::ReportRtcDiagnostics());
+                        self.link.send_message(Msg::RemoveState(State::ConnectedToRtcPeer));
                     }
                     None => {
                         self.link.send_message(Msg::LogEvent(format!(
@@ -948,10 +951,7 @@ impl Component for Model {
                 self.event_log.push(event);
                 true
             }
-            Msg::ServerSentWsMessage(message) => {
-                self.link.send_message(Msg::LogEvent(message));
-                true
-            }
+            
             Msg::InitiateWebsocketConnectionProcess => match WebSocket::new(WEBSOCKET_URL) {
                 Ok(ws) => {
                     let ws = self.setup_websocket_object_callbacks(ws);
