@@ -1211,12 +1211,13 @@ impl Component for Model {
     fn view(&self) -> Html {
         html! {
             <div>
-            // <h1> {"Local Video"} </h1>
+            <h3> {"Local Video"} </h3>
             <video  width="320" height="240" autoplay=true controls=true ref=self.local_video.clone()> </video>
 
 
-            // <h1> "Remote Video" </h1>
+            <h3> {"Remote Video"} </h3>
             <video  width="320" height="240" autoplay=true controls=true ref=self.remote_video.clone()> </video>
+
 
 
 
@@ -1224,6 +1225,12 @@ impl Component for Model {
                     <button onclick=self.link.callback(|_| {Msg::IncreaseLogSize})> {"Increase Log Size"} </button>
                     <button onclick=self.link.callback(|_| {Msg::MaxLogSize})> {"Show all Log"} </button>
                     <button onclick=self.link.callback(|_| {Msg::MinLogSize})> {"Show minimum Log"} </button>
+
+
+            <h4> {"User Model"} </h4>
+            <p> {format!("{:#?}", self.server_model_of_client)} </p>
+
+
 
                 {if (self.event_log.len() > 5 ){ html!(<button onclick=self.link.callback(|_| {Msg::ClearLog})> {"Clear the event log."} </button> )} else {html!(<></>)}  }
                 <div>
