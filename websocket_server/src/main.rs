@@ -1,3 +1,4 @@
+use linked_hash_set::LinkedHashSet;
 // use tokio::stream::StreamExt;
 use tokio::sync::mpsc;
 use tokio::{
@@ -18,7 +19,7 @@ use tokio::time;
 use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap},
     net::SocketAddr,
 };
 
@@ -356,7 +357,7 @@ async fn server_global_state_manager(
                                                         let remove_after_x_rounds : u64 = 4;
 
 
-                                                        let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+                                                        let ( clients,  _client_connections) : (LinkedHashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
                                                         let mut ping_list = HashMap::<uuid::Uuid, Envelope>::new();
 
@@ -442,17 +443,17 @@ async fn server_global_state_manager(
                                                         Command::BroadcastUpdate => {
                                                             let mut online_connections = online_connections.lock().await;
 
-                                                            let ( clients,  _client_connections) : (HashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
+                                                            let ( clients,  _client_connections) : (LinkedHashSet<Client>, Vec<mpsc::Sender<Envelope>>) = online_connections.values().cloned().unzip();
 
                                                             let clients = clients.clone();
                                                             let clients_cloned = clients.clone();
 
 
 
-                                                            let keys : HashSet<uuid::Uuid> =  online_connections.keys().cloned().collect();
+                                                            let keys : LinkedHashSet<uuid::Uuid> =  online_connections.keys().cloned().collect();
 
 
-                                                            let keys_clone : HashSet<uuid::Uuid> = keys.clone().to_owned();
+                                                            let keys_clone : LinkedHashSet<uuid::Uuid> = keys.clone().to_owned();
 
 
                                                             let hashmap = keys_clone.into_iter().zip(clients_cloned).collect::<HashMap<uuid::Uuid, Client>>();
@@ -624,9 +625,7 @@ async fn server_global_state_manager(
                                                 Command::OnlineClients(_clients, _round_number) => {
                                                     // oof just not useful.
                                                 }
-                                                Command::AckClosedConnection(_) => {
-                                                    // This is only useful on the clientside
-                                                }
+                                                
 
                                                 Command::ClosedConnection(client) => {
 
@@ -636,20 +635,16 @@ async fn server_global_state_manager(
                                                     info!("Before closing the connection the online connections are: {:?}", online_connections.clone());
                                                     {
                                                     match online_connections.remove_entry(&client){
-                                                        Some((uuid,(_client, channel))) => {
-                                                            match channel.send(Envelope::new(
+                                                        Some((_uuid,(_client, _channel))) => {
+                                                            let update = Envelope::new(
                                                                 EntityDetails::Server,
-                                                                EntityDetails::Client(uuid),
+                                                                EntityDetails::Server,
                                                                 None,
-                                                                Command::AckClosedConnection(uuid)
-                                                            )).await {
-                                                                Ok(_) => {
-
-                                                                },
-                                                                Err(err) => {
-                                                                    info!("This will fail in the case that the client shut down without handshaking. How shameful. That's ok... I'm making note of this. Revenge will be had. {:?}", err);
-                                                                }
-                                                            }
+                                                                Command::BroadcastUpdate
+                                                            );
+        
+        
+                                                            global_state_update_sender.send((update,None)).await.unwrap();
                                                         },
                                                         None => {
 
@@ -658,15 +653,7 @@ async fn server_global_state_manager(
                                 }
                                                     info!("After closing the connection the online_connections are: {:?}", online_connections.clone());
 
-                                                    let update = Envelope::new(
-                                                        EntityDetails::Server,
-                                                        EntityDetails::Server,
-                                                        None,
-                                                        Command::BroadcastUpdate
-                                                    );
-
-
-                                                    global_state_update_sender.send((update,None)).await.unwrap();
+                                                    
 
                                                     }
 

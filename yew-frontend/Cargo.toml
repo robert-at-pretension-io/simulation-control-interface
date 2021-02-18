@@ -26,6 +26,7 @@ yewtil = {version = "0.3.2", features = ["future"]}
 wasm-bindgen-futures = "0.4.19"
 
 regex = "1.4.3"
+linked_hash_set = "0.1.4"
 
 [dependencies.web-sys]
 version = "0.3"

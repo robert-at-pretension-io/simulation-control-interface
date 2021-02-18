@@ -193,8 +193,6 @@ pub enum Command {
     SdpResponse(String),
     /// This is used for ending the websocket connection between the client and the server. The message direction indicates who has initiated the closure.
     ClosedConnection(uuid::Uuid),
-    /// This is needed to confirm that the server is ready to close the connection
-    AckClosedConnection(uuid::Uuid),
     /// Ice Candidate used for supporting a webrtc connection channel
     IceCandidate(String),
     /// Websocket Ping

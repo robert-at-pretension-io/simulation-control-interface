@@ -272,9 +272,6 @@ impl Model {
                                 cloned.send_message(Msg::ReceivedIceCandidate(ice_candidate));
                             }
                             Command::ClosedConnection(_) => cloned.send_message(Msg::ResetPage),
-                            Command::AckClosedConnection(_) => {
-                                cloned.send_message(Msg::EndWebsocketConnection)
-                            }
                             Command::BroadcastUpdate => {
                                 cloned.send_message(Msg::LogEvent(format!("In the future this will be used for getting all clients synced through datachannel!")));
                             }
@@ -987,16 +984,28 @@ impl Component for Model {
 
                 match self.user_id {
                     Some(this_user) => {
-                        let updated_client = clients.get(&this_user).expect("If a client that is connected to the server currently receives a list of clients online that doesn't include itself then there is a big problem :x").to_owned();
-                        self.link
+                        match clients.get(&this_user) {
+                            Some(updated_client) => {
+                                let updated_client = updated_client.to_owned();
+                                self.link
                             .send_message(Msg::UpdateClientFromServer(updated_client));
                         clients.remove(&this_user);
+                        self.peers = clients;
+                            }
+                            None => {
+
+                                self.link.send_message(Msg::EndWebsocketConnection);
+                                self.link.send_message(Msg::LogEvent(format!("Closed connection since my uuid wasn't in the online list")));
+                            }
+                        }
+                        
                     }
                     None => {
-                        // how?!
+                        self.link.send_message(Msg::EndWebsocketConnection);
+                                self.link.send_message(Msg::LogEvent(format!("Closed connection since my uuid wasn't set")));
                     }
                 }
-                self.peers = clients;
+                
 
                 true
             }
