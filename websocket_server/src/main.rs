@@ -363,7 +363,7 @@ async fn server_global_state_manager(
 
                                                         for client in clients {
                                                             match client.ping_status {
-                                                                PingStatus::Pinged(round_number) => {
+                                                                PingStatus::Pinged(_round_number) => {
                                                                     info!("This client {:#?} seems unresponsive :[... put the logic to remove them from the list here!", client);
 
                                                                     // if (current_round - round_number )> remove_after_x_rounds{

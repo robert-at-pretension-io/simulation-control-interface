@@ -731,16 +731,32 @@ impl Component for Model {
                 true
             }
             Msg::CloseWebRtcConnection => {
-                let me = self.user_id.unwrap();
-                let peer = self.partner.unwrap();
-                let close_msg = Envelope::new(
-                    EntityDetails::Client(me.clone()),
-                    EntityDetails::Client(peer.clone()),
-                    Some(EntityDetails::Server),
-                    Command::EndCall(me, peer),
-                );
+                match self.user_id {
+                    Some(me) => {
+                        match  self.partner {
+                            Some(peer) => {
+                                let close_msg = Envelope::new(
+                                    EntityDetails::Client(me.clone()),
+                                    EntityDetails::Client(peer.clone()),
+                                    Some(EntityDetails::Server),
+                                    Command::EndCall(me, peer),
+                                );
+                
+                                self.send_ws_message(close_msg);
+                            }
+                            None => {
+                                self.link.send_message(Msg::LogEvent(format!("peer was none...")));
+                            }
+                        }
 
-                self.send_ws_message(close_msg);
+                    
+                    }
+                    None => {
+
+                        self.link.send_message(Msg::LogEvent(format!("my uuid was none...")));
+                    }
+                }
+                
 
                 true
             }
@@ -1188,10 +1204,6 @@ impl Component for Model {
                 let sdp = sdp.clone();
                 let client = client.clone();
 
-                let local = self
-                    .local_web_rtc_connection
-                    .clone()
-                    .expect("error in MakeSdpReponse msg");
                 let link = self.link.clone();
                 let local_stream = self.local_stream.clone();
 
@@ -1211,13 +1223,15 @@ impl Component for Model {
     fn view(&self) -> Html {
         html! {
             <div>
+            <div>
             <h3> {"Local Video"} </h3>
             <video  width="320" height="240" autoplay=true controls=true ref=self.local_video.clone()> </video>
+            </div>
 
-
+            <div>
             <h3> {"Remote Video"} </h3>
             <video  width="320" height="240" autoplay=true controls=true ref=self.remote_video.clone()> </video>
-
+            </div>
 
 
 
@@ -1226,10 +1240,10 @@ impl Component for Model {
                     <button onclick=self.link.callback(|_| {Msg::MaxLogSize})> {"Show all Log"} </button>
                     <button onclick=self.link.callback(|_| {Msg::MinLogSize})> {"Show minimum Log"} </button>
 
-
+            <div>
             <h4> {"User Model"} </h4>
             <p> {format!("{:#?}", self.server_model_of_client)} </p>
-
+            </div>
 
 
                 {if (self.event_log.len() > 5 ){ html!(<button onclick=self.link.callback(|_| {Msg::ClearLog})> {"Clear the event log."} </button> )} else {html!(<></>)}  }

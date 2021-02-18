@@ -2,12 +2,11 @@ use bincode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use chrono;
+
 use std::net::SocketAddr;
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap},
     hash::Hash,
-    hash::Hasher,
 };
 
 #[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
