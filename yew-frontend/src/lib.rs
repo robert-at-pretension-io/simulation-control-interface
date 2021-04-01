@@ -65,7 +65,7 @@ struct Model {
 }
 
 impl Model {
-    fn reset_state(&mut self) {
+        fn reset_state(&mut self) {
         self.event_log_length = 5;
         self.username = None;
         self.user_id = None;
@@ -82,14 +82,11 @@ enum Msg {
     UpdateClientFromServer(Client),
     GetUserMediaPermission,
     SetClient(Client),
-    ClearLog,
-    ResetPage,
     LogEvent(String),
-    IncreaseLogSize,
-    DecreaseLogSize,
     MaxLogSize,
     MinLogSize,
     SetLocalMediaStream,
+    ResetPage,
 
     RequestClientBroadcast,
     SetupWebRtc(),
@@ -400,7 +397,7 @@ async fn create_webrtc_offer(
         .offer_to_receive_video(true);
 
     match JsFuture::from(local.create_offer_with_rtc_offer_options(&offer_options))
-        // match JsFuture::from(local.create_offer())
+
         .await
     {
         Ok(offer) => {
@@ -420,8 +417,6 @@ async fn create_webrtc_offer(
         }
     }
 
-    // let offer = JsFuture::from(local.create_offer())
-    // .await;
 }
 
 fn return_ice_callback(
@@ -517,19 +512,11 @@ async fn set_remote_webrtc_offer(
 
                         link.send_message(Msg::LogEvent(format!("Maybe instead, we should try finding the pre-existing transceiver and setting the RtcRtpSender object's tracks to this one!")));
 
-                        // for transceiver in local.get_transceivers().to_vec(){
-                        //     let transceiver = transceiver.dyn_into::<RtcRtpTransceiver>().unwrap();
-                        // }
 
                         if let Some(my_stream) = &local_stream {
                             for track in my_stream.clone().get_tracks().to_vec() {
                                 let track = track.dyn_into::<MediaStreamTrack>().unwrap();
 
-                                // let transceiver: RtcRtpTransceiver =
-                                //     local.add_transceiver_with_media_stream_track(&track);
-
-                                // transceiver.set_direction(RtcRtpTransceiverDirection::Sendrecv);
-                                // link.send_message(Msg::OverrideRtcPeer(local.clone()));
                                 local.add_track(&track, &my_stream, &Array::new());
                             }
                             link.send_message(Msg::LogEvent(format!("Added the local tracks")));
@@ -537,13 +524,6 @@ async fn set_remote_webrtc_offer(
                             link.send_message(Msg::LogEvent(format!("Aparently there is no local_stream... I guess the webcam isn't working OR permission to use the webcam was not aquired :o. This halts the progression of the application :[")));
                         }
 
-                        // let return_track_callback = return_track_added_callback(link.clone());
-                        // local.set_ontrack(Some(return_track_callback.as_ref().unchecked_ref()));
-                        // return_track_callback.forget();
-
-                        // let onicecandidate_callback = return_ice_callback(link.clone());
-                        // local.set_onicecandidate(Some(onicecandidate_callback.as_ref().unchecked_ref()));
-                        // onicecandidate_callback.forget();
 
                         let answer = JsFuture::from(local.create_answer())
                             .await
@@ -554,9 +534,6 @@ async fn set_remote_webrtc_offer(
                                 .expect("error making sdp answer...")
                                 .as_string()
                                 .expect("error converting to string");
-
-                            // let re = Regex::new(r"recvonly").unwrap();
-                            // let string: String = re.replace_all(&answer_sdp, "sendrecv").into();
 
                             let mut answer_obj = RtcSessionDescriptionInit::new(RtcSdpType::Answer);
                             answer_obj.sdp(&answer_sdp);
@@ -674,6 +651,10 @@ impl Component for Model {
 
     fn update(&mut self, msg: Self::Message) -> ShouldRender {
         match msg {
+            Msg::ResetPage => {
+                self.link.send_message(Msg::LogEvent(format!("Should do something here for sure...")));
+                true
+            }
             Msg::RequestClientBroadcast => {
                 let request = Envelope::new(
                     EntityDetails::Client(self.user_id.unwrap()),
@@ -881,32 +862,6 @@ impl Component for Model {
                     candidate.clone()
                 )));
                 self.link.send_message(Msg::SendIceCandidate(candidate));
-                true
-            }
-            Msg::ClearLog => {
-                self.event_log = Vec::<String>::new();
-                true
-            }
-            Msg::IncreaseLogSize => {
-                self.event_log_length = self.event_log_length.clone() + 1;
-                true
-            }
-            Msg::DecreaseLogSize => {
-                if self.event_log_length.clone() > 2 {
-                    self.event_log_length = self.event_log_length.clone() - 1;
-                } else {
-                    self.link.send_message(Msg::LogEvent(format!(
-                        "Can't decrease the event log size even more..."
-                    )));
-                }
-                true
-            }
-
-            Msg::ResetPage => {
-                self.reset_state();
-
-                self.link.send_message(Msg::CloseWebRtcConnection);
-
                 true
             }
 
@@ -1235,10 +1190,10 @@ impl Component for Model {
 
 
 
-                    <button onclick=self.link.callback(|_| {Msg::DecreaseLogSize})> {"Decrease Log Size"} </button>
-                    <button onclick=self.link.callback(|_| {Msg::IncreaseLogSize})> {"Increase Log Size"} </button>
-                    <button onclick=self.link.callback(|_| {Msg::MaxLogSize})> {"Show all Log"} </button>
-                    <button onclick=self.link.callback(|_| {Msg::MinLogSize})> {"Show minimum Log"} </button>
+                    // <button onclick=self.link.callback(|_| {Msg::DecreaseLogSize})> {"Decrease Log Size"} </button>
+                    // <button onclick=self.link.callback(|_| {Msg::IncreaseLogSize})> {"Increase Log Size"} </button>
+                    // <button onclick=self.link.callback(|_| {Msg::MaxLogSize})> {"Show all Log"} </button>
+                    // <button onclick=self.link.callback(|_| {Msg::MinLogSize})> {"Show minimum Log"} </button>
 
             <div>
             <h4> {"User Model"} </h4>
@@ -1246,7 +1201,6 @@ impl Component for Model {
             </div>
 
 
-                {if (self.event_log.len() > 5 ){ html!(<button onclick=self.link.callback(|_| {Msg::ClearLog})> {"Clear the event log."} </button> )} else {html!(<></>)}  }
                 <div>
 
                 {if (self.event_log.len() > 1 ){ html!(<p> {format!("The following details the event log of the application:")} </p> )} else {html!(<></>)}  }

@@ -27,27 +27,16 @@ pub enum Status {
     AnsweringQuestionAboutLastPartner,
 }
 
-// impl PartialEq for Status {
-//     fn eq(&self, other: &Self) -> bool {
-//         match self {
-//             Status::InCall(_a, _b) => match other {
-//                 Status::InCall(_c, _d) => true,
-//                 Status::WaitingForPartner => false,
-//                 Status::AnsweringQuestionAboutLastPartner => false,
-//             },
-//             Status::WaitingForPartner => match other {
-//                 Status::InCall(_c, _d) => false,
-//                 Status::WaitingForPartner => true,
-//                 Status::AnsweringQuestionAboutLastPartner => false,
-//             },
-//             Status::AnsweringQuestionAboutLastPartner => match other {
-//                 Status::InCall(_c, _d) => false,
-//                 Status::WaitingForPartner => false,
-//                 Status::AnsweringQuestionAboutLastPartner => true,
-//             },
-//         }
-//     }
-// }
+#[derive(Debug, Serialize, Deserialize, Hash, Clone, Eq, PartialEq)]
+pub enum Role {
+    Admin,
+    Moderator,
+    User,
+    Server
+}
+
+
+
 
 impl Client {
     pub fn update(&mut self, client: Client) {
@@ -132,6 +121,16 @@ pub enum EntityTypes {
     Server,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Environment {
+    /// This is used for identification within the message routing system
+    pub identity: EntityDetails,
+    /// These will define what behavior is allowed
+    pub roles: Vec<Role>,
+    pub process: Vec<Process>,
+    pub version: u32,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Entity {
     pub entity_type: EntityTypes,
@@ -141,8 +140,8 @@ pub struct Entity {
 impl Entity {
     pub fn new(entity_detail: EntityDetails) -> Entity {
         let entity_type = match entity_detail {
-            EntityDetails::Client(_uuid) => EntityTypes::Client,
-            EntityDetails::Server => EntityTypes::Server,
+            EntityDetails::Client(_uuid, _address) => EntityTypes::Client,
+            EntityDetails::Server(_uuid, _address) => EntityTypes::Server,
         };
 
         Entity {
@@ -152,16 +151,16 @@ impl Entity {
     }
     pub fn get_uuid(&self) -> Option<uuid::Uuid> {
         match self.entity_detail {
-            EntityDetails::Client(uuid) => Some(uuid),
-            EntityDetails::Server => None,
+            EntityDetails::Client(uuid, _address) => Some(uuid),
+            EntityDetails::Server(uuid, address) => Some(uuid),
         }
     }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub enum EntityDetails {
-    Client(uuid::Uuid),
-    Server,
+    Client(uuid::Uuid, SocketAddr),
+    Server(uuid::Uuid, SocketAddr),
 }
 
 type RoundNumber = u64;
@@ -201,21 +200,22 @@ pub enum Command {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Envelope {
+pub struct ContextualizedCommand {
     pub sender: Entity,
     pub intermediary: Option<Entity>,
     pub receiver: Entity,
     pub command: Command,
+    
 }
 
-impl Envelope {
+impl ContextualizedCommand {
     pub fn new(
         sender: EntityDetails,
         receiver: EntityDetails,
         intermediary: Option<EntityDetails>,
         command: Command,
-    ) -> Envelope {
-        Envelope {
+    ) -> ContextualizedCommand {
+        ContextualizedCommand {
             sender: Entity::new(sender),
             receiver: Entity::new(receiver),
             intermediary: intermediary.map_or(None, |ent| Some(Entity::new(ent))),
@@ -242,4 +242,24 @@ impl Envelope {
             command: self.command.clone(),
         }
     }
+}
+
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct Process {
+    /// This will be visible within the user/admin interface to identify which process is occurring. 
+    pub name: String,
+    /// The order the commands are put into the vector is the order in which they will be executed.
+    pub ordered_commands: Vec<ContextualizedCommand>,
+    /// This field explains to any programer/informed user what the purpose of the process is
+    pub explanation: String,
+    /// If this process blocks then the next process will not be able to start execution until this process finishes
+    pub blocking: bool,
+    /// This will determine if a process should repeat from the beginning after its completion (for instance if the behavior within the process is the main functionality of the system!)
+    pub looping: bool,
+
+}
+
+impl Process {
+
 }
