@@ -26,6 +26,10 @@ u("div#nav").after("<p> Nav Bar </p>");
 
 u("div#message_bar").after("<p> Message Bar </p>");
 
+u("div#app").on("new_message", (e) => {
+  console.log("Received the following event details: " + JSON.stringify(e) + JSON.stringify(e.detail));
+});
+
 u("<body>").on("onload", console.log("page loaded"));
 
 

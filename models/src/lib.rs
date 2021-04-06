@@ -2,12 +2,16 @@ use bincode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use std::{time::{Duration, Instant}, u128};
+
 
 use std::net::SocketAddr;
 use std::{
     collections::{HashMap},
     hash::Hash,
 };
+
+use async_trait::async_trait;
 
 #[derive(Debug, Serialize, Deserialize, Hash, PartialEq, Eq, Clone)]
 pub struct Client {
@@ -121,15 +125,42 @@ pub enum EntityTypes {
     Server,
 }
 
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Environment {
     /// This is used for identification within the message routing system
-    pub identity: EntityDetails,
+    pub identity: EntityTypes,
     /// These will define what behavior is allowed
     pub roles: Vec<Role>,
-    pub process: Vec<Process>,
+    /// The environment will orchestrate the running of the processes depending on if they are blocking
+    pub processes: Vec<Process>,
+    /// If the version is out of date with the network of clients or the server, a process of updating will occur
     pub version: u32,
+    /// This is the first function that is run before any others. It will be used to initialize the environment. Most commonly this could include tasks such as opening channels that will be open through the lifetime of the environment
+    pub initialization: Process,
 }
+
+pub struct CommunicationManager {
+    pub me: EntityDetails,
+    pub openChannels: (Box<dyn CommunicationChannel>, EntityDetails, EntityDetails),
+    pub allEntities: Vec<EntityDetails>,
+}
+
+pub enum ChannelTypes {
+    Websocket,
+    WebRtcData,
+    WebRtcVideo,
+}
+
+#[async_trait]
+trait CommunicationChannel {
+    /// The second element in the truple will be the identity of the client who sent the initialize process
+    /// The third item represents the role that the client is currently allowed to take on
+    async fn initialize  (&self, process : Process) -> (Self, EntityDetails, Vec<Role>) where Self : Sized; 
+    async fn send(&self, sender: EntityDetails, receiver : EntityDetails) where Self : Sized;
+    
+}
+
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
 pub struct Entity {
@@ -205,6 +236,8 @@ pub struct ContextualizedCommand {
     pub intermediary: Option<Entity>,
     pub receiver: Entity,
     pub command: Command,
+    /// This will be true if the next command in the process needs to wait for this process to finish. ack will be sent after the command is run on the receiver machine
+    pub needs_ack : bool
     
 }
 
@@ -214,12 +247,14 @@ impl ContextualizedCommand {
         receiver: EntityDetails,
         intermediary: Option<EntityDetails>,
         command: Command,
+        needs_ack : bool,
     ) -> ContextualizedCommand {
         ContextualizedCommand {
             sender: Entity::new(sender),
             receiver: Entity::new(receiver),
             intermediary: intermediary.map_or(None, |ent| Some(Entity::new(ent))),
             command,
+            needs_ack
         }
     }
 
@@ -236,11 +271,34 @@ impl ContextualizedCommand {
 
     pub fn switch_direction(&self) -> Self {
         Self {
+            needs_ack : self.needs_ack.clone(),
             sender: self.receiver.clone(),
             intermediary: self.intermediary.clone(),
             receiver: self.sender.clone(),
             command: self.command.clone(),
         }
+    }
+}
+#[async_trait]
+trait Runtime {
+    type ReturnType;
+    type ErrorType;  
+    fn setup() -> Box< Self>;
+    async fn run(&self)  -> Result<Option<Self::ReturnType>, Option<Self::ErrorType>> where Self : Send;
+    async fn main() -> Result<(u128, Option<Self::ReturnType>), (u128, Option<Self::ErrorType>)> where Self : Send{
+        let start = Instant::now();
+        let s = Self::setup();
+        match s.run().await {
+            Ok(val) => {
+                let time = start.elapsed().as_micros();
+                Ok((time, val))
+            }
+            Err(err) => {
+                let time = start.elapsed().as_micros();
+                Err((time,err))
+            }
+        }
+        
     }
 }
 
