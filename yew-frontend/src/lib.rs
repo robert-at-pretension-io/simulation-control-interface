@@ -11,7 +11,7 @@ use yew::prelude::*;
 use yew::ComponentLink;
 
 // This local trait is for shared objects between the frontend and the backend
-use models::{Client, Command, EntityDetails, Envelope, PingStatus, Status};
+use models::{Client, Command, EntityDetails, ContextualizedCommand, PingStatus, Status};
 
 use std::{collections::HashMap, net::SocketAddr};
 

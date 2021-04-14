@@ -4,6 +4,20 @@ use uuid::Uuid;
 
 use std::{time::{Duration, Instant}, u128};
 
+// use anyhow::Error;
+
+
+/*
+HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStreamTrack,
+    MessageEvent, RtcConfiguration, RtcIceCandidate, RtcIceCandidateInit, RtcIceConnectionState,
+    RtcOfferOptions, RtcPeerConnection, RtcPeerConnectionIceEvent, RtcRtpReceiver,
+    RtcRtpTransceiver, RtcRtpTransceiverDirection, RtcSdpType, RtcSessionDescriptionInit,
+    RtcTrackEvent,
+*/
+use web_sys::{
+     WebSocket as WS,
+};
+
 
 use std::net::SocketAddr;
 use std::{
@@ -38,6 +52,7 @@ pub enum Role {
     User,
     Server
 }
+
 
 
 
@@ -126,24 +141,37 @@ pub enum EntityTypes {
 }
 
 
-#[derive(Debug, Serialize, Deserialize)]
+// #[derive(Debug)]
 pub struct Environment {
     /// This is used for identification within the message routing system
-    pub identity: EntityTypes,
+    pub identity: Entity,
     /// These will define what behavior is allowed
     pub roles: Vec<Role>,
-    /// The environment will orchestrate the running of the processes depending on if they are blocking
+    /// The environment will orchestrate the running of the processes depending on if they are blocking. There must be at least one infinitely looping process in the processes Vec, otherwise the environment is not long-lived... That would be silly.
     pub processes: Vec<Process>,
     /// If the version is out of date with the network of clients or the server, a process of updating will occur
     pub version: u32,
     /// This is the first function that is run before any others. It will be used to initialize the environment. Most commonly this could include tasks such as opening channels that will be open through the lifetime of the environment
     pub initialization: Process,
+    /// Each environment will contain an abstraction of a communication manager. This struct will negotiate messages sent between the Entity and all other Entities. 
+    pub communication_manager: CommunicationManager
 }
 
+
+impl Environment {
+    fn initialize() -> Environment {
+        // First we need to initialize the communication channels involved in this environment. But only the signaling server. The other types of channels will be spun up on demand.
+
+        // let identity = (get this value from the server)
+    }
+
+}
+
+
 pub struct CommunicationManager {
-    pub me: EntityDetails,
-    pub openChannels: (Box<dyn CommunicationChannel>, EntityDetails, EntityDetails),
-    pub allEntities: Vec<EntityDetails>,
+    pub signaling_channel : (Entity, Box<dyn CommunicationChannel>),
+    pub open_channels: Vec<(Box<dyn CommunicationChannel>, Entity, Entity)>,
+    pub all_entities: Vec<Entity>,
 }
 
 pub enum ChannelTypes {
@@ -153,16 +181,35 @@ pub enum ChannelTypes {
 }
 
 #[async_trait]
-trait CommunicationChannel {
+pub trait CommunicationChannel {
     /// The second element in the truple will be the identity of the client who sent the initialize process
     /// The third item represents the role that the client is currently allowed to take on
-    async fn initialize  (&self, process : Process) -> (Self, EntityDetails, Vec<Role>) where Self : Sized; 
-    async fn send(&self, sender: EntityDetails, receiver : EntityDetails) where Self : Sized;
-    
+    async fn initialize  (&self, process : Process) -> (&Self, Entity, Vec<Role>) where Self : Sized; 
+    async fn send(&self, sender: Entity, receiver : Entity, message: ContextualizedCommand) where Self : Sized;
+    async fn receive(&self, sender: EntityDetails, message: ContextualizedCommand) where Self : Sized;
+}
+
+struct WebSocket {
+
+}
+
+#[async_trait]
+impl CommunicationChannel for WebSocket {
+    async fn initialize  (&self, process : Process) -> (&Self, Entity, Vec<Role>) where Self : Sized {
+        todo!()
+    }
+
+    async fn send(&self, sender: Entity, receiver : Entity, message: ContextualizedCommand) where Self : Sized {
+        todo!()
+    }
+
+    async fn receive(&self, sender: EntityDetails, message: ContextualizedCommand) where Self : Sized {
+        todo!()
+    }
 }
 
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct Entity {
     pub entity_type: EntityTypes,
     pub entity_detail: EntityDetails,
@@ -188,13 +235,14 @@ impl Entity {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum EntityDetails {
     Client(uuid::Uuid, SocketAddr),
     Server(uuid::Uuid, SocketAddr),
 }
 
 type RoundNumber = u64;
+
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Command {
@@ -230,31 +278,37 @@ pub enum Command {
     Pong(Uuid, u64),
 }
 
+
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ContextualizedCommand {
+    /// When a command is sent out, this identifier will be used by the environment to track responses.
+    pub uuid : Uuid,
     pub sender: Entity,
     pub intermediary: Option<Entity>,
     pub receiver: Entity,
+    /// This will be a trait object 
     pub command: Command,
-    /// This will be true if the next command in the process needs to wait for this process to finish. ack will be sent after the command is run on the receiver machine
-    pub needs_ack : bool
+    pub response: Option<Command>
     
 }
 
 impl ContextualizedCommand {
     pub fn new(
+        uuid: Uuid,
         sender: EntityDetails,
         receiver: EntityDetails,
         intermediary: Option<EntityDetails>,
         command: Command,
-        needs_ack : bool,
+        response: Option<Command>
     ) -> ContextualizedCommand {
         ContextualizedCommand {
+            uuid,
             sender: Entity::new(sender),
             receiver: Entity::new(receiver),
             intermediary: intermediary.map_or(None, |ent| Some(Entity::new(ent))),
             command,
-            needs_ack
+            response
         }
     }
 
@@ -271,40 +325,48 @@ impl ContextualizedCommand {
 
     pub fn switch_direction(&self) -> Self {
         Self {
-            needs_ack : self.needs_ack.clone(),
             sender: self.receiver.clone(),
             intermediary: self.intermediary.clone(),
             receiver: self.sender.clone(),
             command: self.command.clone(),
+            uuid: self.uuid.clone(),
+            response: self.response.clone(),
+
         }
     }
 }
-#[async_trait]
-trait Runtime {
-    type ReturnType;
-    type ErrorType;  
-    fn setup() -> Box< Self>;
-    async fn run(&self)  -> Result<Option<Self::ReturnType>, Option<Self::ErrorType>> where Self : Send;
-    async fn main() -> Result<(u128, Option<Self::ReturnType>), (u128, Option<Self::ErrorType>)> where Self : Send{
-        let start = Instant::now();
-        let s = Self::setup();
-        match s.run().await {
-            Ok(val) => {
-                let time = start.elapsed().as_micros();
-                Ok((time, val))
-            }
-            Err(err) => {
-                let time = start.elapsed().as_micros();
-                Err((time,err))
-            }
-        }
+// #[async_trait]
+// trait Runtime {
+//     type ReturnType;
+//     type ErrorType;  
+    
+//     fn setup() -> Box<Self>;
+//     async fn run(&self)  -> Result<Option<Self::ReturnType>, Option<Self::ErrorType>> where Self : Send;
+//     async fn main() -> Result<(u128, Option<Self::ReturnType>), (u128, Option<Self::ErrorType>)> where Self : Send{
+//         let start = Instant::now();
+//         let s = Self::setup();
+//         let result = s.run().await;
+//         match result {
+//             Ok(val) => {
+//                 let time = start.elapsed().as_micros();
+//                 Ok((time, val))
+//             }
+//             Err(err) => {
+//                 let time = start.elapsed().as_micros();
+//                 Err((time,err))
+//             }
+//         }
         
-    }
-}
+//     }
+// }
+
+
 
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Process {
+    /// This will be stored within the environment so that multiple asynchronous processes can occur without message collision.
+    pub uuid: Uuid,
     /// This will be visible within the user/admin interface to identify which process is occurring. 
     pub name: String,
     /// The order the commands are put into the vector is the order in which they will be executed.
@@ -315,6 +377,9 @@ pub struct Process {
     pub blocking: bool,
     /// This will determine if a process should repeat from the beginning after its completion (for instance if the behavior within the process is the main functionality of the system!)
     pub looping: bool,
+
+    /// The environment will use this to negotiate the lifetime of the process
+    pub keep_alive : bool
 
 }
 
