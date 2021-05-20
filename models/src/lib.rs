@@ -209,11 +209,16 @@ pub enum SystemLevel {
 pub trait CommunicationChannel {
     /// The second element in the truple will be the identity of the client who sent the initialize process
     /// The third item represents the role that the client is currently allowed to take on
-    async fn initialize  (&self, process : Process) -> (&Self, Entity, Vec<Role>) where Self : Sized; 
+    async fn initialize  (&self, process : dyn Process, keep_alive : PingTime) -> (&Self, Entity, Vec<Role>) where Self : Sized; 
     async fn send(&self, sender: Entity, receiver : Entity, message: ContextualizedCommand) where Self : Sized;
     fn channel(&self) -> (tokio::sync::mpsc::Sender<ContextualizedCommand>,tokio::sync::mpsc::Receiver<ContextualizedCommand>); 
     // async fn receive(&self, sender: EntityDetails, message: ContextualizedCommand) where Self : Sized;
+    
 }
+
+
+//     /// The environment will use this to negotiate the lifetime of the process
+//     pub keep_alive : PingTime
 
 struct WebSocket {
     websocket : WS,
@@ -394,26 +399,29 @@ pub enum Entities {
     Many(EntityTypes),
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Process {
-    /// This will store the types of parties involved in this communication -- Allowing for the involved parties to communicate to all other entities besides the initiator of the process.
-    pub involved_parties : Vec<Entities>,
-    /// This will be the level of the system that this process is involved in changing.
-    pub system_level : Vec<SystemLevel>,
-    /// This will be stored within the environment so that multiple asynchronous processes can occur without message collision.
-    pub uuid: Uuid,
-    /// This will be visible within the user/admin interface to identify which process is occurring. 
-    pub name: String,
-    /// The order the commands are put into the vector is the order in which they will be executed.
-    pub ordered_commands: Vec<ContextualizedCommand>,
-    /// This field explains to any programer/informed user what the purpose of the process is
-    pub explanation: String,
-    /// If this process blocks then the next process will not be able to start execution until this process finishes
-    pub blocking: bool,
-    /// This will determine if a process should repeat from the beginning after its completion (for instance if the behavior within the process is the main functionality of the system!)
-    pub looping: bool,
-    /// The environment will use this to negotiate the lifetime of the process
-    pub keep_alive : PingTime
+// #[derive(Debug, Serialize, Deserialize, Clone)]
+// pub struct Process {
+//     /// This will store the types of parties involved in this communication -- Allowing for the involved parties to communicate to all other entities besides the initiator of the process.
+//     pub involved_parties : Vec<Entities>,
+//     /// This will be the level of the system that this process is involved in changing.
+//     pub system_level : Vec<SystemLevel>,
+//     /// This will be stored within the environment so that multiple asynchronous processes can occur without message collision.
+//     pub uuid: Uuid,
+//     /// This will be visible within the user/admin interface to identify which process is occurring. 
+//     pub name: String,
+//     /// The order the commands are put into the vector is the order in which they will be executed.
+//     pub ordered_commands: Vec<ContextualizedCommand>,
+//     /// This field explains to any programer/informed user what the purpose of the process is
+//     pub explanation: String,
+//     /// If this process blocks then the next process will not be able to start execution until this process finishes
+//     pub blocking: bool,
+//     /// This will determine if a process should repeat from the beginning after its completion (for instance if the behavior within the process is the main functionality of the system!)
+//     pub looping: bool,
+// }
+
+trait Process {
+    fn new(involved_parties : Vec<Entities>, system_level : Vec<SystemLevel>, ordered_commands : Vec<ContextualizedCommand> ,name: String, explanation: String, blocking : bool, looping: bool) -> Self;
+
 
 }
 
