@@ -141,29 +141,37 @@ pub enum EntityTypes {
 }
 
 
-// #[derive(Debug)]
-pub struct Environment {
-    /// This is used for identification within the message routing system
-    pub identity: Entity,
-    /// These will define what behavior is allowed
-    pub roles: Vec<Role>,
-    /// The environment will orchestrate the running of the processes depending on if they are blocking. There must be at least one infinitely looping process in the processes Vec, otherwise the environment is not long-lived... That would be silly.
-    pub processes: Vec<Process>,
-    /// If the version is out of date with the network of clients or the server, a process of updating will occur
-    pub version: u32,
-    /// This is the first function that is run before any others. It will be used to initialize the environment. Most commonly this could include tasks such as opening channels that will be open through the lifetime of the environment
-    pub initialization: Process,
-    /// Each environment will contain an abstraction of a communication manager. This struct will negotiate messages sent between the Entity and all other Entities. 
-    pub communication_manager: CommunicationManager
-}
+// // #[derive(Debug)]
+// pub struct Environment {
+//     /// This is used for identification within the message routing system
+//     pub identity: Entity,
+//     /// These will define what behavior is allowed
+//     // This is an interesting idea BUT the whole network must agree about the roles that an entity is allowed to under-take. This could be alright for a first-draft implementation.
+//     //pub roles: Vec<Role>,
+//     /// The environment will orchestrate the running of the processes depending on if they are blocking. There must be at least one infinitely looping process in the processes Vec, otherwise the environment is not long-lived... That would be silly.
+//     pub processes: Vec<Process>,
+//     /// If the version is out of date with the network of clients or the server, a process of updating will occur
+//     pub version: u32,
+//     /// This is the first function that is run before any others. It will be used to initialize the environment. Most commonly this could include tasks such as opening channels that will be open through the lifetime of the environment
+//     pub initialization: Process,
+//     /// Each environment will contain an abstraction of a communication manager. This struct will negotiate messages sent between the Entity and all other Entities. 
+//     pub communication_manager: CommunicationManager
+// }
 
 
-impl Environment {
-    fn initialize() -> Environment {
-        // First we need to initialize the communication channels involved in this environment. But only the signaling server. The other types of channels will be spun up on demand.
+// impl Environment {
+//     fn initialize() -> Environment {
+//         // First we need to initialize the communication channels involved in this environment. But only the signaling server. The other types of channels will be spun up on demand.
 
-        // let identity = (get this value from the server)
-    }
+//         // let identity = (get this value from the server)
+//     }
+
+// }
+
+trait Environment {
+    fn initialize(initialization : Process) -> Self;
+    fn version() -> u32;
+    fn identity(&self) -> Entity; 
 
 }
 
@@ -172,13 +180,30 @@ pub struct CommunicationManager {
     pub signaling_channel : (Entity, Box<dyn CommunicationChannel>),
     pub open_channels: Vec<(Box<dyn CommunicationChannel>, Entity, Entity)>,
     pub all_entities: Vec<Entity>,
+    pub message_queue : Vec<Box<dyn Message>>,
 }
 
-pub enum ChannelTypes {
-    Websocket,
-    WebRtcData,
-    WebRtcVideo,
+pub trait Message {
+    fn identity(&self) -> Uuid;
+    fn name(&self) -> String;
+    fn description(&self) -> String;
+    fn system_level(&self) -> SystemLevel;
 }
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum SystemLevel {
+    Network,
+    Environment,
+    Process
+}
+
+// pub enum ChannelTypes {
+//     Websocket,
+//     WebRtcData,
+//     WebRtcVideo,
+// }
+
+
 
 #[async_trait]
 pub trait CommunicationChannel {
@@ -186,27 +211,31 @@ pub trait CommunicationChannel {
     /// The third item represents the role that the client is currently allowed to take on
     async fn initialize  (&self, process : Process) -> (&Self, Entity, Vec<Role>) where Self : Sized; 
     async fn send(&self, sender: Entity, receiver : Entity, message: ContextualizedCommand) where Self : Sized;
-    async fn receive(&self, sender: EntityDetails, message: ContextualizedCommand) where Self : Sized;
+    fn channel(&self) -> (tokio::sync::mpsc::Sender<ContextualizedCommand>,tokio::sync::mpsc::Receiver<ContextualizedCommand>); 
+    // async fn receive(&self, sender: EntityDetails, message: ContextualizedCommand) where Self : Sized;
 }
 
 struct WebSocket {
+    websocket : WS,
+    channel: (tokio::sync::mpsc::Sender<ContextualizedCommand>,tokio::sync::mpsc::Receiver<ContextualizedCommand>),
+
 
 }
 
-#[async_trait]
-impl CommunicationChannel for WebSocket {
-    async fn initialize  (&self, process : Process) -> (&Self, Entity, Vec<Role>) where Self : Sized {
-        todo!()
-    }
+// #[async_trait]
+// impl CommunicationChannel for WebSocket {
+//     async fn initialize  (&self, process : Process) -> (&Self, Entity, Vec<Role>) where Self : Sized {
+//         todo!()
+//     }
 
-    async fn send(&self, sender: Entity, receiver : Entity, message: ContextualizedCommand) where Self : Sized {
-        todo!()
-    }
+//     async fn send(&self, sender: Entity, receiver : Entity, message: ContextualizedCommand) where Self : Sized {
+//         todo!()
+//     }
 
-    async fn receive(&self, sender: EntityDetails, message: ContextualizedCommand) where Self : Sized {
-        todo!()
-    }
-}
+//     fn channel(&self) -> (tokio::sync::mpsc::Sender<ContextualizedCommand>,tokio::sync::mpsc::Receiver<ContextualizedCommand>) {
+//         todo!()
+//     }
+// }
 
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
@@ -227,17 +256,12 @@ impl Entity {
             entity_detail,
         }
     }
-    pub fn get_uuid(&self) -> Option<uuid::Uuid> {
-        match self.entity_detail {
-            EntityDetails::Client(uuid, _address) => Some(uuid),
-            EntityDetails::Server(uuid, address) => Some(uuid),
-        }
-    }
+
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub enum EntityDetails {
-    Client(uuid::Uuid, SocketAddr),
+    Client(uuid::Uuid, Option<SocketAddr>),
     Server(uuid::Uuid, SocketAddr),
 }
 
@@ -295,13 +319,15 @@ pub struct ContextualizedCommand {
 
 impl ContextualizedCommand {
     pub fn new(
-        uuid: Uuid,
         sender: EntityDetails,
         receiver: EntityDetails,
         intermediary: Option<EntityDetails>,
         command: Command,
         response: Option<Command>
     ) -> ContextualizedCommand {
+
+        let uuid = Uuid::new_v4();
+
         ContextualizedCommand {
             uuid,
             sender: Entity::new(sender),
@@ -361,10 +387,19 @@ impl ContextualizedCommand {
 // }
 
 
-
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum Entities {
+    One(EntityTypes),
+    Some(u32, EntityTypes),
+    Many(EntityTypes),
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Process {
+    /// This will store the types of parties involved in this communication -- Allowing for the involved parties to communicate to all other entities besides the initiator of the process.
+    pub involved_parties : Vec<Entities>,
+    /// This will be the level of the system that this process is involved in changing.
+    pub system_level : Vec<SystemLevel>,
     /// This will be stored within the environment so that multiple asynchronous processes can occur without message collision.
     pub uuid: Uuid,
     /// This will be visible within the user/admin interface to identify which process is occurring. 
@@ -377,10 +412,19 @@ pub struct Process {
     pub blocking: bool,
     /// This will determine if a process should repeat from the beginning after its completion (for instance if the behavior within the process is the main functionality of the system!)
     pub looping: bool,
-
     /// The environment will use this to negotiate the lifetime of the process
-    pub keep_alive : bool
+    pub keep_alive : PingTime
 
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub enum PingTime {
+    /// The process doesn't need to ping the participants
+    Never,
+    /// The process will ping the participants every u32 seconds
+    Every(u32),
+    /// ping the participants in the process randomly between every u32 and u32 seconds.
+    RandomBetween(u32, u32)
 }
 
 impl Process {

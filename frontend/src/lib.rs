@@ -2,11 +2,12 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::console;
 
-use web_sys::{CustomEventInit, CustomEvent,HtmlElement,
-Window, 
-Document, Event, EventTarget};
+use web_sys::{CustomEventInit, CustomEvent};
+//     ,HtmlElement ,
+// Window, 
+// Document, Event, EventTarget};
 
-use js_sys::JSON;
+// use js_sys::JSON;
 
 // When the `wee_alloc` feature is enabled, this uses `wee_alloc` as the global
 // allocator.
@@ -28,10 +29,18 @@ pub fn main_js() -> Result<(), JsValue> {
     
 
     // Your code goes here!
-    console::log_1(&JsValue::from_str("Hello rusty world!"));
-
+    unsafe{
+        console::log_1(&JsValue::from_str("Hello rusty world!"));    
+    }
+    
     let mut init = CustomEventInit::new();
-    let mut message_details = js_sys::JSON::parse("{\"test\": \"value\"}").unwrap();
+    
+    let mut message_details = 
+    
+    unsafe{
+        js_sys::JSON::parse("{\"test\": \"value\"}").unwrap()
+    };
+    
 
     let custom_event = CustomEvent::new_with_event_init_dict(
         "new_message", init.detail(&message_details)
