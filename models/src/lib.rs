@@ -36,7 +36,7 @@ pub struct Client {
     pub user_id: uuid::Uuid,
     // This will only be set to None if the websocket connection is not yet initialized... Not sure this ever actually happens?
     pub current_socket_addr: Option<SocketAddr>,
-    pub status: Option<Status>,
+    // pub status: Option<Status>,
     pub ping_status: PingStatus,
 }
 
@@ -440,12 +440,22 @@ pub enum Entities {
 pub trait Process {
     fn new(involved_parties : Vec<Entities>, system_level : Vec<SystemLevel>, ordered_commands : Vec<ContextualizedCommand> ,name: String, explanation: String, blocking : bool, looping: bool) -> Self where Self: Sized;
 
+    async fn log_step(&mut self, step : ContextualizedCommand, status: ProcessStatus, posted_by : Entity);
+
     fn waiting_for_message_type(&self) -> dyn Message;
     fn get_uuid(&self) -> Uuid;
     async fn receive_message(&self, message : dyn Message);
     async fn send_message(&mut self, message: dyn Message);
-    async fn start(&self);
+    async fn start(&mut self);
+    async fn start_timed(&mut self);
 
+}
+
+pub enum ProcessStatus {
+    Received,
+    Sent,
+    Waiting,
+    Running
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
