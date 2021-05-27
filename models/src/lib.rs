@@ -1,3 +1,5 @@
+
+
 use bincode;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -168,19 +170,33 @@ pub enum EntityTypes {
 
 // }
 
+#[async_trait]
 trait Environment {
-    fn initialize(initialization : Process) -> Self;
-    fn version() -> u32;
+    async fn initialize(&mut self, communication_manager : impl CommunicationManager, signaling_server : Entity, signaling_channel : impl CommunicationChannel, signal_channel_initialization : impl Process) ;
+    // -> Box<dyn Environment> {
+    //     let mut env = Environment::new().await;
+    //     let (identity, roles, signaling_channel_complete) = signaling_channel.initialize(signal_channel_initialization, signaling_server, PingTime::Never).await;
+    //     let communication_manager_complete = communication_manager.new((signaling_server,signaling_channel_complete)).await;
+    //     env.add_communication_manager(communication_manager_complete).add_identity(identity).add_roles(roles)
+    // }
+    fn add_communication_manager(&mut self, communication_manager : impl CommunicationManager);
+    fn add_identity(&mut self, identity : Entity) ;
+    fn add_roles(&mut self, roles : Vec<Role>) ;
+
+    fn version(&self) -> u32;
     fn identity(&self) -> Entity; 
 
 }
 
 
-pub struct CommunicationManager {
-    pub signaling_channel : (Entity, Box<dyn CommunicationChannel>),
-    pub open_channels: Vec<(Box<dyn CommunicationChannel>, Entity, Entity)>,
-    pub all_entities: Vec<Entity>,
-    pub message_queue : Vec<Box<dyn Message>>,
+#[async_trait]
+trait CommunicationManager {
+async fn new(&mut self, signaling_channel : (Entity, impl CommunicationChannel)) -> Self where Self : Sized;
+async fn add_channel(&mut self, channel: impl CommunicationChannel, participant :Entity) ;
+async fn open_channels(&self) -> &Vec<(&dyn CommunicationChannel, Entity, Entity)>;
+async fn pop_queue(&mut self) -> dyn Message;
+async fn add_to_queue(&mut self, message: dyn Message);  
+
 }
 
 pub trait Message {
@@ -207,9 +223,9 @@ pub enum SystemLevel {
 
 #[async_trait]
 pub trait CommunicationChannel {
-    /// The second element in the truple will be the identity of the client who sent the initialize process
-    /// The third item represents the role that the client is currently allowed to take on
-    async fn initialize  (&self, process : dyn Process, keep_alive : PingTime) -> (&Self, Entity, Vec<Role>) where Self : Sized; 
+    /// The first element in the returned tuple will be the identity of the client who sent the initialize process
+    /// The second item represents the role that the client is currently allowed to take on
+    async fn initialize  (&self, process : impl Process, participant: Entity, keep_alive : PingTime) -> (Entity, Vec<Role>, Self) where Self : Sized; 
     async fn send(&self, sender: Entity, receiver : Entity, message: ContextualizedCommand) where Self : Sized;
     fn channel(&self) -> (tokio::sync::mpsc::Sender<ContextualizedCommand>,tokio::sync::mpsc::Receiver<ContextualizedCommand>); 
     // async fn receive(&self, sender: EntityDetails, message: ContextualizedCommand) where Self : Sized;
@@ -419,9 +435,16 @@ pub enum Entities {
 //     pub looping: bool,
 // }
 
-trait Process {
-    fn new(involved_parties : Vec<Entities>, system_level : Vec<SystemLevel>, ordered_commands : Vec<ContextualizedCommand> ,name: String, explanation: String, blocking : bool, looping: bool) -> Self;
 
+#[async_trait]
+pub trait Process {
+    fn new(involved_parties : Vec<Entities>, system_level : Vec<SystemLevel>, ordered_commands : Vec<ContextualizedCommand> ,name: String, explanation: String, blocking : bool, looping: bool) -> Self where Self: Sized;
+
+    fn waiting_for_message_type(&self) -> dyn Message;
+    fn get_uuid(&self) -> Uuid;
+    async fn receive_message(&self, message : dyn Message);
+    async fn send_message(&mut self, message: dyn Message);
+    async fn start(&self);
 
 }
 
@@ -435,6 +458,3 @@ pub enum PingTime {
     RandomBetween(u32, u32)
 }
 
-impl Process {
-
-}

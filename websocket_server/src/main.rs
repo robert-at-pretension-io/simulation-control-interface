@@ -28,7 +28,7 @@ use std::{
 use log::info;
 use tracing::{instrument, Level};
 
-use models::{Client, Command, EntityDetails, EntityTypes, Envelope, PingStatus};
+use models::{Client, Command, EntityDetails, EntityTypes, PingStatus};
 
 use native_tls::Identity;
 use tokio_native_tls::native_tls;
