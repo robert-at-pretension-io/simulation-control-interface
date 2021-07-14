@@ -43,13 +43,13 @@ pub enum Status {
     AnsweringQuestionAboutLastPartner,
 }
 
-#[derive(Debug, Serialize, Deserialize, Hash, Clone, Eq, PartialEq)]
-pub enum Role {
-    Admin,
-    Moderator,
-    User,
-    Server
-}
+// #[derive(Debug, Serialize, Deserialize, Hash, Clone, Eq, PartialEq)]
+// pub enum Role {
+//     Admin,
+//     Moderator,
+//     User,
+//     Server
+// }
 
 impl Client {
     pub fn update(&mut self, client: Client) {
@@ -134,7 +134,7 @@ trait Environment {
     async fn register_process_message(waiting_process : impl Process, wait_for_message : impl Message);
     fn add_communication_manager(&mut self, communication_manager : impl CommunicationManager);
     fn add_identity(&mut self, identity : Entity) ;
-    fn add_roles(&mut self, roles : Vec<Role>) ;
+    // fn add_roles(&mut self, roles : Vec<Role>) ;
     fn version(&self) -> u32;
     fn identity(&self) -> Entity; 
 
@@ -156,27 +156,36 @@ pub trait Message {
     fn identity(&self) -> Uuid;
     fn name(&self) -> String;
     fn description(&self) -> String;
-    fn system_level(&self) -> SystemLevel;
+    // fn system_level(&self) -> SystemLevel;
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum SystemLevel {
-    /// Used for sending Messages between two separate environments. Network level messages can initiate Environment and Process level messages BUT only after an authorization process occurs.
-    Network,
-    /// Used for Controlling fundamental aspects of the environment from inside the environment.
-    Environment,
-    /// Control messages for processes
-    Process
-}
+// #[derive(Debug, Serialize, Deserialize, Clone)]
+// pub enum SystemLevel {
+//     /// Used for sending Messages between two separate environments. Network level messages can initiate Environment and Process level messages BUT only after an authorization process occurs.
+//     Network,
+//     /// Used for Controlling fundamental aspects of the environment from inside the environment.
+//     Environment,
+//     /// Control messages for processes
+//     Process
+// }
 
 #[async_trait]
 pub trait CommunicationChannel {
     /// The first element in the returned tuple will be the identity of the client who sent the initialize process
     /// The second item represents the role that the client is currently allowed to take on
-    async fn initialize  (&self, setup_channel : impl Process, participant: Entity, keep_alive : PingTime) -> (Entity, Vec<Role>, Self) where Self : Sized; 
+    async fn initialize  (&self, setup_channel : impl Process, participant: Entity, keep_alive : PingTime, channel_type : ChannelType) -> (Entity, /*Vec<Role>,*/ Self) where Self : Sized; 
     async fn send(&self, sender: Entity, receiver : Entity, message: impl Message) where Self : Sized;
     fn channel(&self) -> (tokio::sync::mpsc::Sender<Box<dyn Message>>,tokio::sync::mpsc::Receiver<Box<dyn Message>>); 
     async fn receive(&self, sender: EntityDetails, message: impl Message) where Self : Sized;
+    
+}
+
+pub enum ChannelType {
+     Signaling,
+     Communication
+}
+
+pub trait NetworkTopology {
     
 }
 
@@ -186,7 +195,7 @@ pub trait CommunicationChannel {
 
 struct WebSocket {
     websocket : WS,
-    channel: (tokio::sync::mpsc::Sender<ContextualizedCommand>,tokio::sync::mpsc::Receiver<ContextualizedCommand>),
+    channel: (tokio::sync::mpsc::Sender<Box<dyn Message>>,tokio::sync::mpsc::Receiver<Box<dyn Message>>),
 
 
 }
@@ -283,13 +292,16 @@ pub enum Entities {
 
 #[async_trait]
 pub trait Process {
-    fn new(involved_parties : Vec<Entities>, system_level : Vec<SystemLevel>, ordered_commands : Vec<impl Message> ,name: String, explanation: String, blocking : bool, looping: bool) -> Self where Self: Sized;
+    fn new(involved_parties : Vec<Entities>, 
+        // system_level : Vec<SystemLevel>, 
+        ordered_message_pairs : Vec<(Box<dyn Message>, Box<dyn Message>)> ,name: String, explanation: String, blocking : bool, looping: bool) -> Self where Self: Sized;
 
     async fn log_step(&mut self, step : impl Message, status: ProcessStatus, posted_by : Entity);
 
     fn waiting_for_message_type(&self) -> dyn Message;
     fn get_uuid(&self) -> Uuid;
     async fn receive_message(&self, message : dyn Message);
+    /// Sends the message and pushes the 'focus token' onto the next message in the  ```rust ordered_message_pairs ```
     async fn send_message(&mut self, message: dyn Message);
     async fn start(&mut self);
     async fn start_timed(&mut self);

@@ -3,8 +3,8 @@
 members = [
     #"simulation_control_interface",
     "storage_backend",
-    "websocket_server",
-    "yew-frontend",
+    #"websocket_server",
+    #"yew-frontend",
     "models",
     "graphical_control_application",
     "frontend"
