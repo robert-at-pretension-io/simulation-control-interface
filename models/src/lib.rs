@@ -164,9 +164,13 @@ async fn add_to_queue(&mut self, message: dyn Message);
 
 
 }
+
+
+/// The process manager hooks up the process runtime with the network topology. It keeps track of receving internal control messages from the communication manager.
 #[async_trait]
 pub trait ProcessManager {
-async fn initialize(identity : Entity);
+
+    async fn initialize(identity : Entity);
 }
 
 
@@ -179,18 +183,9 @@ pub trait Message {
     fn identity(&self) -> Uuid;
     fn name(&self) -> String;
     fn description(&self) -> String;
-    // fn system_level(&self) -> SystemLevel;
+    fn data(&self) -> Option<Vec<u8>>;
 }
 
-// #[derive(Debug, Serialize, Deserialize, Clone)]
-// pub enum SystemLevel {
-//     /// Used for sending Messages between two separate environments. Network level messages can initiate Environment and Process level messages BUT only after an authorization process occurs.
-//     Network,
-//     /// Used for Controlling fundamental aspects of the environment from inside the environment.
-//     Environment,
-//     /// Control messages for processes
-//     Process
-// }
 
 #[async_trait]
 pub trait CommunicationChannel {
@@ -305,7 +300,9 @@ pub enum Command {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Entities {
     One(EntityTypes),
-    Some(u32, EntityTypes)
+    Exactly(u32, EntityTypes),
+    UpTo(u32, EntityTypes),
+    AtLeast(u32, EntityTypes)
 }
 
 
@@ -327,6 +324,8 @@ pub trait Process {
     async fn start_timed(&mut self);
 
 }
+
+
 
 pub enum ProcessStatus {
     Received,
