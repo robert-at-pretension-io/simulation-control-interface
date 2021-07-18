@@ -1,10 +1,9 @@
 
 
-use bincode;
+use petgraph::EdgeType;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use std::{time::{Duration, Instant}, u128};
 
 // use anyhow::Error;
 
@@ -19,6 +18,8 @@ HtmlMediaElement, MediaDevices, MediaStream, MediaStreamConstraints, MediaStream
 use web_sys::{
      WebSocket as WS,
 };
+
+use petgraph::graphmap::{GraphMap, UnGraphMap};
 
 
 use std::net::SocketAddr;
@@ -127,30 +128,52 @@ pub enum EntityTypes {
     Server,
 }
 
+type NetworkTopology = GraphMap<Entity, (Entity,Entity), Undirected>;
 
 #[async_trait]
 trait Environment {
-    async fn initialize(&mut self, communication_manager : impl CommunicationManager, signaling_server : Entity, signaling_channel : impl CommunicationChannel, signal_channel_initialization : impl Process, environment_processes : Vec<impl Process>) ;
+    async fn initialize(&mut self, communication_manager : impl CommunicationManager,  environment_processes : Vec<impl Process>) -> Result<NetworkTopology, EnvironmentErrors>;
     async fn register_process_message(waiting_process : impl Process, wait_for_message : impl Message);
-    fn add_communication_manager(&mut self, communication_manager : impl CommunicationManager);
-    fn add_identity(&mut self, identity : Entity) ;
-    // fn add_roles(&mut self, roles : Vec<Role>) ;
     fn version(&self) -> u32;
     fn identity(&self) -> Entity; 
 
+}
+
+pub struct Undirected  {
+}
+
+impl EdgeType for Undirected {
+    fn is_directed() -> bool{
+        false
+    }
+}
+
+pub enum EnvironmentErrors {
+    FailureToInitialize,
 }
 
 
 #[async_trait]
 trait CommunicationManager {
     /// The return Entity refers to the identity of the environment. In this system, the identity refers to the environment instead of the user. This is mainly because Entities are used to connect the network in a certain topology...
-async fn new(&mut self, signaling_channel : (Entity, impl CommunicationChannel)) -> (Self, Entity) where Self : Sized;
-async fn add_channel(&mut self, channel: impl CommunicationChannel, participant :Entity) ;
+async fn new(&mut self, allowed_communication_types : Vec<(EntityTypes,EntityTypes)>, signaling_server : (Entity, impl CommunicationChannel), signal_channel_initialization : impl Process) -> (Self, Entity) where Self : Sized;
+async fn add_channel(&mut self, channel: impl CommunicationChannel, participant :Entity) -> Result<(), CommunicationErrors>;
 async fn open_channels(&self) -> &Vec<(&dyn CommunicationChannel, Entity)>;
 async fn pop_queue(&mut self) -> dyn Message;
 async fn add_to_queue(&mut self, message: dyn Message);  
 
+
 }
+#[async_trait]
+pub trait ProcessManager {
+async fn initialize(identity : Entity);
+}
+
+
+pub enum CommunicationErrors {
+    DisallowedEntityType,
+    ChannelInitializationFailed,
+} 
 
 pub trait Message {
     fn identity(&self) -> Uuid;
@@ -173,7 +196,7 @@ pub trait Message {
 pub trait CommunicationChannel {
     /// The first element in the returned tuple will be the identity of the client who sent the initialize process
     /// The second item represents the role that the client is currently allowed to take on
-    async fn initialize  (&self, setup_channel : impl Process, participant: Entity, keep_alive : PingTime, channel_type : ChannelType) -> (Entity, /*Vec<Role>,*/ Self) where Self : Sized; 
+    async fn initialize  (&self, setup_channel : impl Process, participant: Entity, keep_alive : PingTime, channel_type : ChannelType) -> Result<(Entity, /*Vec<Role>,*/ Self), CommunicationErrors> where Self : Sized; 
     async fn send(&self, sender: Entity, receiver : Entity, message: impl Message) where Self : Sized;
     fn channel(&self) -> (tokio::sync::mpsc::Sender<Box<dyn Message>>,tokio::sync::mpsc::Receiver<Box<dyn Message>>); 
     async fn receive(&self, sender: EntityDetails, message: impl Message) where Self : Sized;
@@ -185,9 +208,7 @@ pub enum ChannelType {
      Communication
 }
 
-pub trait NetworkTopology {
-    
-}
+
 
 
 //     /// The environment will use this to negotiate the lifetime of the process
@@ -284,17 +305,16 @@ pub enum Command {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum Entities {
     One(EntityTypes),
-    Some(u32, EntityTypes),
-    Many(EntityTypes),
+    Some(u32, EntityTypes)
 }
+
 
 
 
 #[async_trait]
 pub trait Process {
-    fn new(involved_parties : Vec<Entities>, 
-        // system_level : Vec<SystemLevel>, 
-        ordered_message_pairs : Vec<(Box<dyn Message>, Box<dyn Message>)> ,name: String, explanation: String, blocking : bool, looping: bool) -> Self where Self: Sized;
+    fn new(involved_parties : Vec<Entities>,
+        ordered_messages : Vec<(EntityTypes, Box<dyn Message> )> ,name: String, explanation: String, blocking : bool, looping: bool) -> Self where Self: Sized;
 
     async fn log_step(&mut self, step : impl Message, status: ProcessStatus, posted_by : Entity);
 
