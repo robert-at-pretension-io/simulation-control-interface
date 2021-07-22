@@ -2,6 +2,7 @@
 
 use petgraph::EdgeType;
 use serde::{Deserialize, Serialize};
+use erased_serde::Serialize as ErasedSerialize;
 use uuid::Uuid;
 
 
@@ -131,9 +132,9 @@ pub enum EntityTypes {
 type NetworkTopology = GraphMap<Entity, (Entity,Entity), Undirected>;
 
 #[async_trait]
-trait Environment {
-    async fn initialize(&mut self, communication_manager : impl CommunicationManager,  environment_processes : Vec<impl Process>) -> Result<NetworkTopology, EnvironmentErrors>;
-    async fn register_process_message(waiting_process : impl Process, wait_for_message : impl Message);
+pub trait Environment : InternalSystemComponents{
+    async fn initialize(&mut self, communication_manager : impl CommunicationManager,  environment_processes : Vec<impl Process>) -> Result<(NetworkTopology, Entity), EnvironmentErrors>;
+    async fn run(&mut self);
     fn version(&self) -> u32;
     fn identity(&self) -> Entity; 
 
@@ -154,23 +155,33 @@ pub enum EnvironmentErrors {
 
 
 #[async_trait]
-trait CommunicationManager {
+pub trait CommunicationManager : InternalSystemComponents {
     /// The return Entity refers to the identity of the environment. In this system, the identity refers to the environment instead of the user. This is mainly because Entities are used to connect the network in a certain topology...
 async fn new(&mut self, allowed_communication_types : Vec<(EntityTypes,EntityTypes)>, signaling_server : (Entity, impl CommunicationChannel), signal_channel_initialization : impl Process) -> (Self, Entity) where Self : Sized;
 async fn add_channel(&mut self, channel: impl CommunicationChannel, participant :Entity) -> Result<(), CommunicationErrors>;
 async fn open_channels(&self) -> &Vec<(&dyn CommunicationChannel, Entity)>;
+async fn register_process_message(&self, waiting_process : impl Process, wait_for_message : impl Message);
 async fn pop_queue(&mut self) -> dyn Message;
 async fn add_to_queue(&mut self, message: dyn Message);  
 
 
 }
 
+#[async_trait]
+pub trait InternalSystemComponents {
+    async fn send_receive_messages(&self, message : InternalMessage);
+    fn get_uuid(&self) -> Uuid;
+}
 
 /// The process manager hooks up the process runtime with the network topology. It keeps track of receving internal control messages from the communication manager.
 #[async_trait]
-pub trait ProcessManager {
+pub trait ProcessManager : InternalSystemComponents{
+    async fn initialize(identity : Entity) -> Self where Self : Sized;
+    fn register_functionality(process : impl Process);
+}
 
-    async fn initialize(identity : Entity);
+pub struct StateManager {
+    state: HashMap<String, Box<dyn ErasedSerialize>>
 }
 
 
@@ -183,19 +194,27 @@ pub trait Message {
     fn identity(&self) -> Uuid;
     fn name(&self) -> String;
     fn description(&self) -> String;
-    fn data(&self) -> Option<Vec<u8>>;
+    fn data(&self, send_data : Option<Box<dyn ErasedSerialize>>) -> Option<Vec<u8>>;
+}
+/// This enum will be used for communicating between the major independent components of the system. As of writing, these include: 1) The process manager, 2) The state manager, 3) The Network manager. All communication between entities will be specified by sending processes between network entities. The process manager and communcation(network) manager will then orchestrate amongst themselves how processes are carried out. In order for the system to be very flexible and extensible, the state manager and process manager are going to be defined in terms of traits (abstract interfaces). Also, the data-structures used for distributed state management is based on p2p consensus, allowing for the applications to be more akin to configurations of a dynamic/powerful system built with the rust language. The internal messages are separated from process messages for another good reason: Any internal message interpreted within an environment or system can easily considered to have fully-authorized permission and allows for rapid velocity of development.
+pub enum InternalMessage{
+    StartProcess(Uuid),
+    PolluteProcess(Uuid),
+    AdvanceProcess(Uuid),
+    SendProcess(Uuid),
+    CloseChannel(Uuid),
+    OpenChannel(Uuid)
 }
 
-
 #[async_trait]
-pub trait CommunicationChannel {
+pub trait CommunicationChannel :  ErasedSerialize{
     /// The first element in the returned tuple will be the identity of the client who sent the initialize process
     /// The second item represents the role that the client is currently allowed to take on
-    async fn initialize  (&self, setup_channel : impl Process, participant: Entity, keep_alive : PingTime, channel_type : ChannelType) -> Result<(Entity, /*Vec<Role>,*/ Self), CommunicationErrors> where Self : Sized; 
+    async fn initialize  (&self, setup_channel : impl Process, participant: Entity, keep_alive : PingTime, channel_type : ChannelType) -> Result<(Entity, Self), CommunicationErrors> where Self : Sized; 
     async fn send(&self, sender: Entity, receiver : Entity, message: impl Message) where Self : Sized;
     fn channel(&self) -> (tokio::sync::mpsc::Sender<Box<dyn Message>>,tokio::sync::mpsc::Receiver<Box<dyn Message>>); 
     async fn receive(&self, sender: EntityDetails, message: impl Message) where Self : Sized;
-    
+    fn identity(&self) -> Uuid;
 }
 
 pub enum ChannelType {
@@ -309,20 +328,19 @@ pub enum Entities {
 
 
 #[async_trait]
-pub trait Process {
+pub trait Process : InternalSystemComponents{
     fn new(involved_parties : Vec<Entities>,
         ordered_messages : Vec<(EntityTypes, Box<dyn Message> )> ,name: String, explanation: String, blocking : bool, looping: bool) -> Self where Self: Sized;
 
     async fn log_step(&mut self, step : impl Message, status: ProcessStatus, posted_by : Entity);
 
     fn waiting_for_message_type(&self) -> dyn Message;
-    fn get_uuid(&self) -> Uuid;
+    
     async fn receive_message(&self, message : dyn Message);
     /// Sends the message and pushes the 'focus token' onto the next message in the  ```rust ordered_message_pairs ```
     async fn send_message(&mut self, message: dyn Message);
     async fn start(&mut self);
     async fn start_timed(&mut self);
-
 }
 
 
